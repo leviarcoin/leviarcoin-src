@@ -73,8 +73,7 @@ const char     MINER_CONFIG_FILE_NAME[]                      = "miner_conf.json"
 
 const char     CRYPTONOTE_NAME[]                             = "leviarcoin";
 // Genesis TxHex
-// NOTE: THIS WILL BE RELEASED AFTER ICO
-const char     GENESIS_COINBASE_TX_HEX[]                     = "rel-after-ico";
+const char GENESIS_COINBASE_TX_HEX[] = "013c01ff000180c092928d96b801029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd0880712101ba9c8f29dc3b154d3f40d2d1669c98468523bd129991df5d5cf1fc184256c3ee";
 
 const uint8_t  CURRENT_TRANSACTION_VERSION                   =  1;
 const uint8_t  BLOCK_MAJOR_VERSION_1                         =  1;
@@ -104,7 +103,8 @@ const size_t   P2P_DEFAULT_HANDSHAKE_INVOKE_TIMEOUT          = 5000;          //
 const char     P2P_STAT_TRUSTED_PUB_KEY[]                    = "8f80f9a5a434a9f1510d13336228debfee9c918ce505efe225d8c94d045fa115";
 
 const std::initializer_list<const char*> SEED_NODES = {
-  "leviarcoin.org:18001",
+  "node.leviarcoin.org:18001",
+  "node2.leviarcoin.org:18001",
 };
 
 struct CheckpointData {

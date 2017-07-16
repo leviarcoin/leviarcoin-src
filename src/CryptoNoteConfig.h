@@ -73,7 +73,7 @@ const char     MINER_CONFIG_FILE_NAME[]                      = "miner_conf.json"
 
 const char     CRYPTONOTE_NAME[]                             = "leviarcoin";
 // Genesis TxHex
-const char GENESIS_COINBASE_TX_HEX[] = "013c01ff000180c092928d96b801029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd0880712101ba9c8f29dc3b154d3f40d2d1669c98468523bd129991df5d5cf1fc184256c3ee";
+const char GENESIS_COINBASE_TX_HEX[] = "013c01ff000180c092928d96b801029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd088071210104bbb5fb59c2c9c7f474ba938323e1ebc0c1dcd4216769e2626b9f7638a784e2";
 
 const uint8_t  CURRENT_TRANSACTION_VERSION                   =  1;
 const uint8_t  BLOCK_MAJOR_VERSION_1                         =  1;

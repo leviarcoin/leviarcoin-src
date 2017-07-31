@@ -814,7 +814,7 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
 
   uint8_t version = getHardForkVersion(bei.height);
   size_t target = version == (uint8_t) 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
-  logger(ERROR, BRIGHT_RED) << "ALTERNATIVE !!!! LIMIT: " << parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION << " CHAIN HEIGHT " << getCurrentBlockchainHeight() << "-- BLOCK NR" << bei.height << " HF VER:" << getHardForkVersion(bei.height) << " target: " << target << " NEXT: " << m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
+  
   return m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
 }
 

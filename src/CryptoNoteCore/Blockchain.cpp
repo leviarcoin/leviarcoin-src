@@ -632,13 +632,13 @@ bool Blockchain::getBlockHeight(const Crypto::Hash& blockId, uint32_t& blockHeig
 }
 
 uint8_t Blockchain::getHardForkVersion() {
-  if(getCurrentBlockchainHeight() >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION) return 1;
-  return 0;
+  if(getCurrentBlockchainHeight() >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION) return (uint8_t) 1;
+  return (uint8_t) 0;
 }
 
-uint8_t Blockchain::getHardForkVersion(uint8_t height) {
-  if(height >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION) return 1;
-  return 0;
+uint8_t Blockchain::getHardForkVersion(uint32_t height) {
+  if(height >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION) return (uint8_t) 1;
+  return (uint8_t) 0;
 }
 
 difficulty_type Blockchain::getDifficultyForNextBlock() {
@@ -655,7 +655,10 @@ difficulty_type Blockchain::getDifficultyForNextBlock() {
     commulative_difficulties.push_back(m_blocks[offset].cumulative_difficulty);
   }
 
-  size_t target = getHardForkVersion(timestamps.size()) == 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
+  uint32_t height = getCurrentBlockchainHeight();
+  uint8_t version = getHardForkVersion(height);
+  uint64_t target = version == (uint8_t) 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
+logger(ERROR, BRIGHT_RED) << "LIMIT: " << parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION << " CHAIN HEIGHT " << getCurrentBlockchainHeight() << "-- BLOCK NR" << offset << " HF VER:" << getHardForkVersion(height) << " target: " << target << " NEXT: " << m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
   return m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
 }
 
@@ -809,7 +812,9 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
     }
   }
 
-  size_t target = getHardForkVersion(bei.height) == 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
+  uint8_t version = getHardForkVersion(bei.height);
+  size_t target = version == (uint8_t) 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
+  logger(ERROR, BRIGHT_RED) << "ALTERNATIVE !!!! LIMIT: " << parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION << " CHAIN HEIGHT " << getCurrentBlockchainHeight() << "-- BLOCK NR" << bei.height << " HF VER:" << getHardForkVersion(bei.height) << " target: " << target << " NEXT: " << m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
   return m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
 }
 
@@ -1457,7 +1462,8 @@ bool Blockchain::is_tx_spendtime_unlocked(uint64_t unlock_time) {
   } else {
     //interpret as time
     uint64_t current_time = static_cast<uint64_t>(time(NULL));
-    if (current_time + (getHardForkVersion() == 0 ? m_currency.lockedTxAllowedDeltaSecondsV1() : m_currency.lockedTxAllowedDeltaSeconds()) >= unlock_time)
+    uint8_t version = getHardForkVersion();
+    if (current_time + (version == (uint8_t) 0 ? m_currency.lockedTxAllowedDeltaSecondsV1() : m_currency.lockedTxAllowedDeltaSeconds()) >= unlock_time)
       return true;
     else
       return false;

@@ -67,7 +67,7 @@ namespace CryptoNote {
     bool getBlockHeight(const Crypto::Hash& blockId, uint32_t& blockHeight);
 
     uint8_t getHardForkVersion();
-    uint8_t getHardForkVersion(uint8_t height);
+    uint8_t getHardForkVersion(uint32_t height);
 
     template<class archive_t> void serialize(archive_t & ar, const unsigned int version);
 

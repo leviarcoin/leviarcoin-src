@@ -358,7 +358,7 @@ bool Currency::parseAmount(const std::string& str, uint64_t& amount) const {
 }
 
 difficulty_type Currency::nextDifficulty(std::vector<uint64_t> timestamps,
-  std::vector<difficulty_type> cumulativeDifficulties, size_t target_seconds) const {
+  std::vector<difficulty_type> cumulativeDifficulties, uint64_t target_seconds) const {
   assert(m_difficultyWindow >= 2);
 
   if (timestamps.size() > m_difficultyWindow) {

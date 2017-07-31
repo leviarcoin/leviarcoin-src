@@ -39,7 +39,7 @@ const uint64_t MINIMUM_FEE                                   = 1000;
 const uint64_t DEFAULT_DUST_THRESHOLD                        = MINIMUM_FEE;
 
 //Forks config
-const uint8_t LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION          = (uint8_t)24000;
+const uint32_t LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION          = 24000;
 
 //Block's target time
 const uint64_t DIFFICULTY_TARGET                             = 120; // seconds

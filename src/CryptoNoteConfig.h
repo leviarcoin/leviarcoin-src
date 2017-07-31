@@ -44,7 +44,7 @@ const uint8_t LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION          = (uint8_t)24000;
 //Block's target time
 const uint64_t DIFFICULTY_TARGET                             = 120; // seconds
 //Block's target time hardfork
-const uint64_t DIFFICULTY_TARGET_V1                          = 60; // seconds (until block 20000)
+const uint64_t DIFFICULTY_TARGET_V1                          = 60; // seconds (until block 24000)
 
 const size_t   DIFFICULTY_WINDOW                             = 1440; // blocks
 const size_t   DIFFICULTY_CUT                                = 60;  // timestamps to cut after sorting

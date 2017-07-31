@@ -69,6 +69,8 @@ struct EllipticCurveScalar {
     friend bool check_signature(const Hash &, const PublicKey &, const Signature &);
     static void generate_key_image(const PublicKey &, const SecretKey &, KeyImage &);
     friend void generate_key_image(const PublicKey &, const SecretKey &, KeyImage &);
+    static KeyImage scalarmultKey(const KeyImage & P, const KeyImage & a);
+    friend KeyImage scalarmultKey(const KeyImage & P, const KeyImage & a);
     static void hash_data_to_ec(const uint8_t*, std::size_t, PublicKey&);
     friend void hash_data_to_ec(const uint8_t*, std::size_t, PublicKey&);
     static void generate_ring_signature(const Hash &, const KeyImage &,
@@ -120,6 +122,10 @@ struct EllipticCurveScalar {
     }
   };
 
+  inline KeyImage scalarmultKey(const KeyImage & P, const KeyImage & a) {
+    return crypto_ops::scalarmultKey(P, a);
+  }
+
   /* Generate a new key pair
    */
   inline void generate_keys(PublicKey &pub, SecretKey &sec) {
@@ -163,7 +169,7 @@ struct EllipticCurveScalar {
     const PublicKey &derived_key, PublicKey &base, EllipticCurveScalar &hashed_derivation) {
     return crypto_ops::underive_public_key_and_get_scalar(derivation, output_index, derived_key, base, hashed_derivation);
   }
-  
+
   inline void derive_secret_key(const KeyDerivation &derivation, std::size_t output_index,
     const SecretKey &base, const uint8_t* prefix, size_t prefixLength, SecretKey &derived_key) {
     crypto_ops::derive_secret_key(derivation, output_index, base, prefix, prefixLength, derived_key);

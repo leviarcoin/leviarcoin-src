@@ -25,6 +25,7 @@
 using namespace Logging;
 #include "CryptoNoteCore/CoreConfig.h"
 
+using namespace  Crypto;
 using namespace  Common;
 
 namespace CryptoNote {
@@ -263,11 +264,37 @@ bool core::check_tx_semantic(const Transaction& tx, bool keeped_by_block) {
 }
 
 bool core::check_tx_inputs_keyimages_diff(const Transaction& tx) {
+  // parameters used for the additional key_image check
+  static const Crypto::KeyImage Z = { { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+  static const Crypto::KeyImage I = { { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+  static const Crypto::KeyImage L = { { 0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10 } };
+
   std::unordered_set<Crypto::KeyImage> ki;
   for (const auto& in : tx.inputs) {
     if (in.type() == typeid(KeyInput)) {
-      if (!ki.insert(boost::get<KeyInput>(in).keyImage).second)
+      if (!ki.insert(boost::get<KeyInput>(in).keyImage).second) {
+        logger(ERROR) << "Transaction has identical key images";
         return false;
+      }
+
+      if (boost::get<KeyInput>(in).outputIndexes.empty()) {
+        logger(ERROR) << "Transaction's input uses empty output";
+        return false;
+      }
+
+      // additional key_image check
+  	  // Fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
+  	  if (!(scalarmultKey(boost::get<KeyInput>(in).keyImage, L) == I)) {
+  		  logger(ERROR) << "Transaction uses key image not in the valid domain";
+  		  return false;
+  	  }
+
+      // outputIndexes are packed here, first is absolute, others are offsets to previous,
+      // so first can be zero, others can't
+      if (std::find(++std::begin(boost::get<KeyInput>(in).outputIndexes), std::end(boost::get<KeyInput>(in).outputIndexes), 0) != std::end(boost::get<KeyInput>(in).outputIndexes)) {
+        logger(ERROR) << "Transaction has identical output indexes";
+        return false;
+      }
     }
   }
   return true;

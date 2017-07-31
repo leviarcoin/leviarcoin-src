@@ -16,6 +16,7 @@
 #include "CryptoNoteTools.h"
 
 using namespace Logging;
+using namespace Crypto;
 using namespace Common;
 
 namespace {
@@ -658,7 +659,7 @@ difficulty_type Blockchain::getDifficultyForNextBlock() {
   uint32_t height = getCurrentBlockchainHeight();
   uint8_t version = getHardForkVersion(height);
   uint64_t target = version == (uint8_t) 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
-  
+
   return m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
 }
 
@@ -1500,6 +1501,14 @@ bool Blockchain::check_tx_input(const KeyInput& txin, const Crypto::Hash& tx_pre
       return true;
     }
   };
+
+  // additional key_image check, fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
+  static const Crypto::KeyImage I = { { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+  static const Crypto::KeyImage L = { { 0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10 } };
+  if (!(scalarmultKey(txin.keyImage, L) == I)) {
+	 logger(ERROR) << "Transaction uses key image not in the valid domain";
+	 return false;
+  }
 
   //check ring signature
   std::vector<const Crypto::PublicKey *> output_keys;

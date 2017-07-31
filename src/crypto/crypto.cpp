@@ -106,6 +106,17 @@ namespace Crypto {
     hash_to_scalar(&buf, bufSize + suffixLength, res);
   }
 
+  KeyImage crypto_ops::scalarmultKey(const KeyImage & P, const KeyImage & a) {
+    ge_p3 A;
+    ge_p2 R;
+    // maybe use assert instead?
+    ge_frombytes_vartime(&A, reinterpret_cast<const unsigned char*>(&P));
+    ge_scalarmult(&R, reinterpret_cast<const unsigned char*>(&a), &A);
+    KeyImage aP;
+    ge_tobytes(reinterpret_cast<unsigned char*>(&aP), &R);
+    return aP;
+  }
+
   bool crypto_ops::derive_public_key(const KeyDerivation &derivation, size_t output_index,
     const PublicKey &base, PublicKey &derived_key) {
     EllipticCurveScalar scalar;
@@ -295,7 +306,7 @@ namespace Crypto {
     ge_p1p1_to_p2(&point, &point2);
     ge_tobytes(reinterpret_cast<unsigned char*>(&key), &point);
   }
-  
+
   void crypto_ops::generate_key_image(const PublicKey &pub, const SecretKey &sec, KeyImage &image) {
     ge_p3 point;
     ge_p2 point2;
@@ -304,7 +315,7 @@ namespace Crypto {
     ge_scalarmult(&point2, reinterpret_cast<const unsigned char*>(&sec), &point);
     ge_tobytes(reinterpret_cast<unsigned char*>(&image), &point2);
   }
-  
+
   void crypto_ops::generate_incomplete_key_image(const PublicKey &pub, EllipticCurvePoint &incomplete_key_image) {
     ge_p3 point;
     hash_to_ec(pub, point);
@@ -427,4 +438,5 @@ namespace Crypto {
     sc_sub(reinterpret_cast<unsigned char*>(&h), reinterpret_cast<unsigned char*>(&h), reinterpret_cast<unsigned char*>(&sum));
     return sc_isnonzero(reinterpret_cast<unsigned char*>(&h)) == 0;
   }
+
 }

@@ -45,7 +45,7 @@ CryptoNoteProtocolHandler::CryptoNoteProtocolHandler(const Currency& currency, S
   m_observedHeight(0),
   m_peersCount(0),
   logger(log, "protocol") {
-  
+
   if (!m_p2p) {
     m_p2p = &m_p2p_stub;
   }
@@ -155,7 +155,7 @@ bool CryptoNoteProtocolHandler::process_payload_sync_data(const CORE_SYNC_DATA& 
 
     logger(diff >= 0 ? (is_inital ? Logging::INFO : Logging::DEBUGGING) : Logging::TRACE, Logging::BRIGHT_YELLOW) << context <<
       "Sync data returned unknown top block: " << get_current_blockchain_height() << " -> " << hshd.current_height
-      << " [" << std::abs(diff) << " blocks (" << std::abs(diff) / (24 * 60 * 60 / m_currency.difficultyTarget()) << " days) "
+      << " [" << std::abs(diff) << " blocks (" << std::abs(diff) / (24 * 60 * 60 / (get_current_blockchain_height() >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION ? m_currency.difficultyTarget() : m_currency.difficultyTargetV1())) << " days) "
       << (diff >= 0 ? std::string("behind") : std::string("ahead")) << "] " << std::endl << "SYNCHRONIZATION started";
 
     logger(Logging::DEBUGGING) << "Remote top block height: " << hshd.current_height << ", id: " << hshd.top_id;
@@ -501,7 +501,7 @@ bool CryptoNoteProtocolHandler::request_missing_objects(CryptoNoteConnectionCont
         << "\r\nm_last_response_height=" << context.m_last_response_height
         << "\r\nm_remote_blockchain_height=" << context.m_remote_blockchain_height
         << "\r\nm_needed_objects.size()=" << context.m_needed_objects.size()
-        << "\r\nm_requested_objects.size()=" << context.m_requested_objects.size() 
+        << "\r\nm_requested_objects.size()=" << context.m_requested_objects.size()
         << "\r\non connection [" << context << "]";
       return false;
     }

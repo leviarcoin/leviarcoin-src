@@ -631,6 +631,16 @@ bool Blockchain::getBlockHeight(const Crypto::Hash& blockId, uint32_t& blockHeig
   return m_blockIndex.getBlockHeight(blockId, blockHeight);
 }
 
+uint8_t Blockchain::getHardForkVersion() {
+  if(getCurrentBlockchainHeight() >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION) return 1;
+  return 0;
+}
+
+uint8_t Blockchain::getHardForkVersion(uint8_t height) {
+  if(height >= parameters::LEVIARCOIN_HARDFORK_BLOCK_ACTIVATION) return 1;
+  return 0;
+}
+
 difficulty_type Blockchain::getDifficultyForNextBlock() {
   std::lock_guard<decltype(m_blockchain_lock)> lk(m_blockchain_lock);
   std::vector<uint64_t> timestamps;
@@ -645,7 +655,8 @@ difficulty_type Blockchain::getDifficultyForNextBlock() {
     commulative_difficulties.push_back(m_blocks[offset].cumulative_difficulty);
   }
 
-  return m_currency.nextDifficulty(timestamps, commulative_difficulties);
+  size_t target = getHardForkVersion(timestamps.size()) == 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
+  return m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
 }
 
 uint64_t Blockchain::getCoinsInCirculation() {
@@ -798,7 +809,8 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
     }
   }
 
-  return m_currency.nextDifficulty(timestamps, commulative_difficulties);
+  size_t target = getHardForkVersion(bei.height) == 0 ? parameters::DIFFICULTY_TARGET_V1 : parameters::DIFFICULTY_TARGET;
+  return m_currency.nextDifficulty(timestamps, commulative_difficulties, target);
 }
 
 bool Blockchain::prevalidate_miner_transaction(const Block& b, uint32_t height) {
@@ -1445,7 +1457,7 @@ bool Blockchain::is_tx_spendtime_unlocked(uint64_t unlock_time) {
   } else {
     //interpret as time
     uint64_t current_time = static_cast<uint64_t>(time(NULL));
-    if (current_time + m_currency.lockedTxAllowedDeltaSeconds() >= unlock_time)
+    if (current_time + (getHardForkVersion() == 0 ? m_currency.lockedTxAllowedDeltaSecondsV1() : m_currency.lockedTxAllowedDeltaSeconds()) >= unlock_time)
       return true;
     else
       return false;

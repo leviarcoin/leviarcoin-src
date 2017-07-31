@@ -107,7 +107,7 @@ bool Currency::getBlockReward(size_t medianSize, size_t currentBlockSize, uint64
   } else {
     baseReward = (m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor;
   }
-  
+
   medianSize = std::max(medianSize, m_blockGrantedFullRewardZone);
   if (currentBlockSize > UINT64_C(2) * medianSize) {
     logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
@@ -275,7 +275,7 @@ bool Currency::isAmountApplicableInFusionTransactionInput(uint64_t amount, uint6
   auto it = std::lower_bound(PRETTY_AMOUNTS.begin(), PRETTY_AMOUNTS.end(), amount);
   if (it == PRETTY_AMOUNTS.end() || amount != *it) {
     return false;
-  } 
+  }
 
   amountPowerOfTen = static_cast<uint8_t>(std::distance(PRETTY_AMOUNTS.begin(), it) / 9);
   return true;
@@ -358,7 +358,7 @@ bool Currency::parseAmount(const std::string& str, uint64_t& amount) const {
 }
 
 difficulty_type Currency::nextDifficulty(std::vector<uint64_t> timestamps,
-  std::vector<difficulty_type> cumulativeDifficulties) const {
+  std::vector<difficulty_type> cumulativeDifficulties, size_t target_seconds) const {
   assert(m_difficultyWindow >= 2);
 
   if (timestamps.size() > m_difficultyWindow) {
@@ -394,7 +394,7 @@ difficulty_type Currency::nextDifficulty(std::vector<uint64_t> timestamps,
   assert(totalWork > 0);
 
   uint64_t low, high;
-  low = mul128(totalWork, m_difficultyTarget, &high);
+  low = mul128(totalWork, target_seconds, &high);
   if (high != 0 || low + timeSpan - 1 < low) {
     return 0;
   }
@@ -458,6 +458,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   defaultDustThreshold(parameters::DEFAULT_DUST_THRESHOLD);
 
   difficultyTarget(parameters::DIFFICULTY_TARGET);
+  difficultyTargetV1(parameters::DIFFICULTY_TARGET_V1);
   difficultyWindow(parameters::DIFFICULTY_WINDOW);
   difficultyLag(parameters::DIFFICULTY_LAG);
   difficultyCut(parameters::DIFFICULTY_CUT);
@@ -467,6 +468,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   maxBlockSizeGrowthSpeedDenominator(parameters::MAX_BLOCK_SIZE_GROWTH_SPEED_DENOMINATOR);
 
   lockedTxAllowedDeltaSeconds(parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS);
+  lockedTxAllowedDeltaSecondsV1(parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V1);
   lockedTxAllowedDeltaBlocks(parameters::CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS);
 
   mempoolTxLiveTime(parameters::CRYPTONOTE_MEMPOOL_TX_LIVETIME);

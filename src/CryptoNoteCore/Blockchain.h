@@ -66,6 +66,9 @@ namespace CryptoNote {
     bool getBlockByHash(const Crypto::Hash &h, Block &blk);
     bool getBlockHeight(const Crypto::Hash& blockId, uint32_t& blockHeight);
 
+    uint8_t getHardForkVersion();
+    uint8_t getHardForkVersion(uint8_t height);
+
     template<class archive_t> void serialize(archive_t & ar, const unsigned int version);
 
     bool haveTransaction(const Crypto::Hash &id);
@@ -358,4 +361,3 @@ namespace CryptoNote {
     return true;
   }
 }
-

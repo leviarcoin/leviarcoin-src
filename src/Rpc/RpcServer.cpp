@@ -173,6 +173,8 @@ bool RpcServer::processJsonRpcRequest(const HttpRequest& request, HttpResponse& 
     jsonResponse.setId(jsonRequest.getId()); // copy id
 
     static std::unordered_map<std::string, RpcServer::RpcHandler<JsonMemberMethod>> jsonRpcHandlers = {
+      { "getblockdata", { makeMemberMethod(&RpcServer::on_getblockdata), false } },
+      { "gettransaction", { makeMemberMethod(&RpcServer::on_gettransaction), false } },
       { "getblockcount", { makeMemberMethod(&RpcServer::on_getblockcount), true } },
       { "on_getblockhash", { makeMemberMethod(&RpcServer::on_getblockhash), false } },
       { "getblocktemplate", { makeMemberMethod(&RpcServer::on_getblocktemplate), false } },
@@ -510,6 +512,191 @@ bool RpcServer::on_stop_daemon(const COMMAND_RPC_STOP_DAEMON::request& req, COMM
 //------------------------------------------------------------------------------------------------------------------------------
 // JSON RPC methods
 //------------------------------------------------------------------------------------------------------------------------------
+bool RpcServer::on_getblockdata(const COMMAND_RPC_GET_BLOCK_DETAILS::request& req, COMMAND_RPC_GET_BLOCK_DETAILS::response& res) {
+    Hash hash;
+    
+    try {
+        uint32_t height = boost::lexical_cast<uint32_t>(req.hash);
+        hash = m_core.getBlockHashByIndex(height);
+    } catch (boost::bad_lexical_cast &) {
+        if (!parse_hash256(req.hash, hash)) {
+            throw JsonRpc::JsonRpcError{
+                CORE_RPC_ERROR_CODE_WRONG_PARAM,
+                "Failed to parse hex representation of block hash. Hex = " + req.hash + '.' };
+        }
+    }
+    
+    if (!m_core.hasBlock(hash)) {
+        throw JsonRpc::JsonRpcError{
+            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+            "Internal error: can't get block by hash. Hash = " + req.hash + '.' };
+    }
+    BlockTemplate blk = m_core.getBlockByHash(hash);
+    BlockDetails blkDetails = m_core.getBlockDetails(hash);
+    
+    if (blk.baseTransaction.inputs.front().type() != typeid(BaseInput)) {
+        throw JsonRpc::JsonRpcError{
+            CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+            "Internal error: coinbase transaction in the block has the wrong type" };
+    }
+    
+    block_header_response block_header;
+    res.block.height = boost::get<BaseInput>(blk.baseTransaction.inputs.front()).blockIndex;
+    fill_block_header_response(blk, false, res.block.height, hash, block_header);
+    
+    res.block.major_version = block_header.major_version;
+    res.block.minor_version = block_header.minor_version;
+    res.block.timestamp = block_header.timestamp;
+    res.block.prev_hash = block_header.prev_hash;
+    res.block.nonce = block_header.nonce;
+    res.block.hash = Common::podToHex(hash);
+    res.block.depth = m_core.getTopBlockIndex() - res.block.height;
+    res.block.difficulty = m_core.getBlockDifficulty(res.block.height);
+    res.block.transactionsCumulativeSize = blkDetails.transactionsCumulativeSize;
+    res.block.alreadyGeneratedCoins = std::to_string(blkDetails.alreadyGeneratedCoins);
+    res.block.alreadyGeneratedTransactions = blkDetails.alreadyGeneratedTransactions;
+    res.block.reward = block_header.reward;
+    res.block.sizeMedian = blkDetails.sizeMedian;
+    res.block.blockSize = blkDetails.blockSize;
+    res.block.orphan_status = blkDetails.isAlternative;
+    
+    uint64_t maxReward = 0;
+    uint64_t currentReward = 0;
+    int64_t emissionChange = 0;
+    size_t blockGrantedFullRewardZone = m_core.getCurrency().blockGrantedFullRewardZoneByBlockVersion(block_header.major_version);
+    res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
+    
+    res.block.baseReward = blkDetails.baseReward;
+    res.block.penalty = blkDetails.penalty;
+    
+    // Base transaction adding
+    transaction_short_response transaction_short;
+    transaction_short.hash = Common::podToHex(getObjectHash(blk.baseTransaction));
+    transaction_short.fee = 0;
+    transaction_short.amount_out = getOutputAmount(blk.baseTransaction);
+    transaction_short.size = getObjectBinarySize(blk.baseTransaction);
+    res.block.transactions.push_back(transaction_short);
+    
+    std::vector<Crypto::Hash> missed_txs;
+    std::vector<BinaryArray> txs;
+    m_core.getTransactions(blk.transactionHashes, txs, missed_txs);
+    
+    res.block.totalFeeAmount = 0;
+    
+    for (const BinaryArray& ba : txs) {
+        Transaction tx;
+        if (!fromBinaryArray(tx, ba)) {
+            throw std::runtime_error("Couldn't deserialize transaction");
+        }
+        transaction_short_response transaction_short;
+        uint64_t amount_in = getInputAmount(tx);
+        uint64_t amount_out = getOutputAmount(tx);
+        
+        transaction_short.hash = Common::podToHex(getObjectHash(tx));
+        transaction_short.fee = amount_in - amount_out;
+        transaction_short.amount_out = amount_out;
+        transaction_short.size = getObjectBinarySize(tx);
+        res.block.transactions.push_back(transaction_short);
+        
+        res.block.totalFeeAmount += transaction_short.fee;
+    }
+    
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+}
+
+bool RpcServer::getMixin(const Transaction& transaction, uint64_t& mixin) {
+    mixin = 0;
+    for (const TransactionInput& txin : transaction.inputs) {
+        if (txin.type() != typeid(KeyInput)) {
+            continue;
+        }
+        uint64_t currentMixin = boost::get<KeyInput>(txin).outputIndexes.size();
+        if (currentMixin > mixin) {
+            mixin = currentMixin;
+        }
+    }
+    return true;
+}
+
+bool RpcServer::on_gettransaction(const COMMAND_RPC_GET_TRANSACTION_DETAILS::request& req, COMMAND_RPC_GET_TRANSACTION_DETAILS::response& res) {
+    Hash hash;
+    
+    if (!parse_hash256(req.hash, hash)) {
+        throw JsonRpc::JsonRpcError{
+            CORE_RPC_ERROR_CODE_WRONG_PARAM,
+            "Failed to parse hex representation of transaction hash. Hex = " + req.hash + '.' };
+    }
+    
+    std::vector<Crypto::Hash> tx_ids;
+    tx_ids.push_back(hash);
+    
+    std::vector<Crypto::Hash> missed_txs;
+    std::vector<BinaryArray> txs;
+    m_core.getTransactions(tx_ids, txs, missed_txs);
+    
+    if (1 == txs.size()) {
+        Transaction transaction;
+        if (!fromBinaryArray(transaction, txs.front())) {
+            throw std::runtime_error("Couldn't deserialize transaction");
+        }
+        res.tx = transaction;
+    } else {
+        throw JsonRpc::JsonRpcError{
+            CORE_RPC_ERROR_CODE_WRONG_PARAM,
+            "transaction wasn't found. Hash = " + req.hash + '.' };
+    }
+    TransactionDetails transactionDetails = m_core.getTransactionDetails(hash);
+    
+    Crypto::Hash blockHash;
+    if (transactionDetails.inBlockchain) {
+        uint32_t blockHeight = transactionDetails.blockIndex;
+        if (!blockHeight) {
+            throw JsonRpc::JsonRpcError{
+                CORE_RPC_ERROR_CODE_INTERNAL_ERROR,
+                "Internal error: can't get transaction by hash. Hash = " + Common::podToHex(hash) + '.' };
+        }
+        blockHash = m_core.getBlockHashByIndex(blockHeight);
+        BlockTemplate blk = m_core.getBlockByHash(blockHash);
+        BlockDetails blkDetails = m_core.getBlockDetails(blockHash);
+        
+        block_short_response block_short;
+        
+        block_short.cumul_size = blkDetails.blockSize;
+        block_short.timestamp = blk.timestamp;
+        block_short.height = blockHeight;
+        block_short.hash = Common::podToHex(blockHash);
+        block_short.tx_count = blk.transactionHashes.size() + 1;
+        res.block = block_short;
+    }
+    
+    uint64_t amount_in = getInputAmount(res.tx);
+    uint64_t amount_out = getOutputAmount(res.tx);
+    
+    res.txDetails.hash = Common::podToHex(getObjectHash(res.tx));
+    res.txDetails.fee = amount_in - amount_out;
+    if (amount_in == 0)
+        res.txDetails.fee = 0;
+    res.txDetails.amount_out = amount_out;
+    res.txDetails.size = getObjectBinarySize(res.tx);
+    
+    uint64_t mixin;
+    if (!getMixin(res.tx, mixin)) {
+        return false;
+    }
+    res.txDetails.mixin = mixin;
+    
+    Crypto::Hash paymentId;
+    if (CryptoNote::getPaymentIdFromTxExtra(res.tx.extra, paymentId)) {
+        res.txDetails.paymentId = Common::podToHex(paymentId);
+    } else {
+        res.txDetails.paymentId = "";
+    }
+    
+    res.status = CORE_RPC_STATUS_OK;
+    return true;
+}
+
 bool RpcServer::on_getblockcount(const COMMAND_RPC_GETBLOCKCOUNT::request& req, COMMAND_RPC_GETBLOCKCOUNT::response& res) {
   res.count = m_core.getTopBlockIndex() + 1;
   res.status = CORE_RPC_STATUS_OK;

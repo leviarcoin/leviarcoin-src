@@ -122,7 +122,11 @@ struct CheckpointData {
   const char* blockId;
 };
 
-const CheckpointData CHECKPOINTS[] = {};
+const CheckpointData CHECKPOINTS[] = {
+	{ 10000, "02ff33848a071b41cd7db0d9a0778c4c8af7fdb6584b6025f31fb690bd20bc6f" },
+	{ 22940, "e35bbbb6b076f12978b67b4be72b23b1ec779ebb9f3293903228a52d1e2b6acc" },
+  { 30000, "8104c5d16b45b522dfa3c2b995231647d4eff95d6139c8502a74fa59cfacb419" }
+};
 } // CryptoNote
 
 #define ALLOW_DEBUG_COMMANDS

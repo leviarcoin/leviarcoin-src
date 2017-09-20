@@ -1,3 +1,11 @@
+Release notes 2.1.1
+
+- Updated RocksDB to release 4.11.2
+- Transaction pool issue fixes
+- Daemon synchronization improvements
+- Daemon synchronization issue fix
+- Daemon stability enhancements
+
 Release notes 2.0.6
 
 - Wallet synchronization enhancements
@@ -110,7 +118,7 @@ Release notes 1.0.0
 - Transaction priority based on tx fee
 - Transactions are returned from tx pools after 24 hours
 - Dynamic maximum block size limit
-- Reduced default transaction fee 
+- Reduced default transaction fee
 - Various network health updates
 
 Release notes 0.8.11
@@ -164,15 +172,15 @@ Release notes 0.8.3
 
 - JSON RPC for wallet
 - fixed bug with blockchain storing
-- fixed bug with correct display of transfer's change 
+- fixed bug with correct display of transfer's change
 - bug fix in simple wallet
 
 Release notes 0.8.2
 
-- now wallet is still working when daemon stores blockchain and can't serve clients; 
-- no-console option for a daemon; 
-- fixed problem with network synchronization; 
-- major bug fix in simple wallet. 
+- now wallet is still working when daemon stores blockchain and can't serve clients;
+- no-console option for a daemon;
+- fixed problem with network synchronization;
+- major bug fix in simple wallet.
 
 Release notes 0.8.1
 

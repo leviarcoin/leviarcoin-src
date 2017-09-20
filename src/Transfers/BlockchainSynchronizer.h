@@ -115,7 +115,7 @@ private:
   void doRemoveUnconfirmedTransaction(const Crypto::Hash& transactionHash);
 
   ///second parameter is used only in case of errors returned into callback from INode, such as aborted or connection lost
-  bool setFutureState(State s); 
+  bool setFutureState(State s);
   bool setFutureStateIf(State s, std::function<bool(void)>&& pred);
 
   void actualizeFutureState();
@@ -146,6 +146,8 @@ private:
   mutable std::mutex m_consumersMutex;
   mutable std::mutex m_stateMutex;
   std::condition_variable m_hasWork;
+
+  bool wasStarted = false;
 };
 
 }

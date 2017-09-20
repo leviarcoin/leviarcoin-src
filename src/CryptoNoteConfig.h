@@ -89,7 +89,7 @@ const uint8_t  BLOCK_MAJOR_VERSION_1                         =  1;
 const uint8_t  BLOCK_MINOR_VERSION_0                         =  0;
 
 const size_t   BLOCKS_IDS_SYNCHRONIZING_DEFAULT_COUNT        =  10000;  //by default, blocks ids count in synchronizing
-const size_t   BLOCKS_SYNCHRONIZING_DEFAULT_COUNT            =  200;    //by default, blocks count in blocks downloading
+const size_t   BLOCKS_SYNCHRONIZING_DEFAULT_COUNT            =  300;    //by default, blocks count in blocks downloading
 const size_t   COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT         =  1000;
 
 const int      P2P_DEFAULT_PORT                              = 18001;
@@ -99,7 +99,7 @@ const int      DRM_NETWORK_DEFAULT_PORT                      = 19002;
 const size_t   P2P_LOCAL_WHITE_PEERLIST_LIMIT                =  1000;
 const size_t   P2P_LOCAL_GRAY_PEERLIST_LIMIT                 =  5000;
 
-const size_t   P2P_CONNECTION_MAX_WRITE_BUFFER_SIZE          = 16 * 1024 * 1024; // 16 MB
+const size_t   P2P_CONNECTION_MAX_WRITE_BUFFER_SIZE          = 32 * 1024 * 1024; // 32 MB
 const uint32_t P2P_DEFAULT_CONNECTIONS_COUNT                 = 8;
 const size_t   P2P_DEFAULT_WHITELIST_CONNECTIONS_PERCENT     = 70;
 const uint32_t P2P_DEFAULT_HANDSHAKE_INTERVAL                = 60;            // seconds
@@ -115,6 +115,7 @@ const char* const SEED_NODES[] = {
   "46.101.28.201:18001",
   "138.68.176.26:18001",
   "138.68.58.151:18001",
+  "185.111.216.136:18001",
 };
 
 struct CheckpointData {
@@ -125,7 +126,12 @@ struct CheckpointData {
 const CheckpointData CHECKPOINTS[] = {
 	{ 10000, "02ff33848a071b41cd7db0d9a0778c4c8af7fdb6584b6025f31fb690bd20bc6f" },
 	{ 22940, "e35bbbb6b076f12978b67b4be72b23b1ec779ebb9f3293903228a52d1e2b6acc" },
-  { 30000, "8104c5d16b45b522dfa3c2b995231647d4eff95d6139c8502a74fa59cfacb419" }
+  { 30000, "8104c5d16b45b522dfa3c2b995231647d4eff95d6139c8502a74fa59cfacb419" },
+  { 40000, "20e8704c80b0e3d1d4acf862b30d3542f4ca15bab8b1c775efb10999d1366205" },
+  { 50000, "c505294e2210788d6178ea771fa27d3d965113712672480d2d689fd1859b9523" },
+  { 60000, "77b43f2fb5d601a901a8fd5be759cc328524d866d241b02fb187d6236dd92101" },
+  { 70000, "d090d17b651e6263df8b15bfb18d9234d3accb12d46b40db8cfdb8b4df38afcc" },
+  { 80000, "8fbd3664fa660a349fd2bc7e06e9f4fe61854b045d06b59debf043e8f43a21d4" }
 };
 } // CryptoNote
 

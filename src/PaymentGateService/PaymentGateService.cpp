@@ -117,7 +117,7 @@ const CryptoNote::Currency PaymentGateService::getCurrency() {
 }
 
 void PaymentGateService::run() {
-  
+
   System::Dispatcher localDispatcher;
   System::Event localStopEvent(localDispatcher);
 
@@ -160,9 +160,9 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   //TODO: make command line options
   dbConfig.setConfigFolderDefaulted(true);
   dbConfig.setDataDir(config.dataDir);
-  dbConfig.setMaxOpenFiles(10);
-  dbConfig.setReadCacheSize(100*1024*1024);
-  dbConfig.setWriteBufferSize(100*1024*1024);
+  dbConfig.setMaxOpenFiles(20);
+  dbConfig.setReadCacheSize(128*1024*1024);
+  dbConfig.setWriteBufferSize(128*1024*1024);
   dbConfig.setTestnet(false);
   dbConfig.setBackgroundThreadsCount(2);
 
@@ -232,7 +232,7 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   log(Logging::INFO) << "Spawning p2p server";
 
   System::Event p2pStarted(*dispatcher);
-  
+
   System::Context<> context(*dispatcher, [&]() {
     p2pStarted.set();
     p2pNode.run();
@@ -245,16 +245,16 @@ void PaymentGateService::runInProcess(Logging::LoggerRef& log) {
   p2pNode.sendStopSignal();
   context.get();
   node->shutdown();
-  p2pNode.deinit(); 
+  p2pNode.deinit();
 }
 
 void PaymentGateService::runRpcProxy(Logging::LoggerRef& log) {
   log(Logging::INFO) << "Starting Payment Gate with remote node";
   CryptoNote::Currency currency = currencyBuilder.currency();
-  
+
   std::unique_ptr<CryptoNote::INode> node(
     PaymentService::NodeFactory::createNode(
-      config.remoteNodeConfig.daemonHost, 
+      config.remoteNodeConfig.daemonHost,
       config.remoteNodeConfig.daemonPort,
       log.getLogger()));
 

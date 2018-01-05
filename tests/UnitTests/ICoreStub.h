@@ -47,12 +47,12 @@ public:
   virtual Crypto::Hash getTopBlockHash() const override;
   virtual uint64_t getBlockTimestampByIndex(uint32_t blockIndex) const override;
   virtual CryptoNote::BlockTemplate getBlockByIndex(uint32_t index) const override;
-  
+
   virtual CryptoNote::Difficulty getDifficultyForNextBlock() const override;
   virtual std::error_code addBlock(const CryptoNote::CachedBlock& cachedBlock, CryptoNote::RawBlock&& rawBlock) override;
   virtual std::error_code addBlock(CryptoNote::RawBlock&& rawBlock) override;
   virtual std::error_code submitBlock(CryptoNote::BinaryArray&& rawBlockTemplate) override;
-  
+
   virtual std::vector<CryptoNote::RawBlock> getBlocks(uint32_t startIndex, uint32_t count) const override;
   virtual void getBlocks(const std::vector<Crypto::Hash>& blockHashes, std::vector<CryptoNote::RawBlock>& blocks, std::vector<Crypto::Hash>& missedHashes) const override;
   virtual bool getRandomOutputs(uint64_t amount, uint16_t count, std::vector<uint32_t>& globalIndexes, std::vector<Crypto::PublicKey>& publicKeys) const override;
@@ -96,9 +96,7 @@ public:
 
   void setPoolTxVerificationResult(bool result);
   void setPoolChangesResult(bool result);
-  boost::optional<std::pair<CryptoNote::MultisignatureOutput, uint64_t>>
-  getMultisignatureOutput(uint64_t amount, uint32_t globalIndex) const override { return {}; }
-
+  
   virtual bool hasTransaction(const Crypto::Hash& transactionHash) const override;
   virtual CryptoNote::BlockDetails getBlockDetails(const Crypto::Hash& blockHash) const override;
   virtual CryptoNote::TransactionDetails getTransactionDetails(const Crypto::Hash& transactionHash) const override;

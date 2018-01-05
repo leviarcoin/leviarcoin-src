@@ -51,6 +51,16 @@ MinerEvent BlockchainUpdatedEvent() {
 
 void adjustMergeMiningTag(BlockTemplate& blockTemplate) {
   CachedBlock cachedBlock(blockTemplate);
+  if (blockTemplate.majorVersion >= BLOCK_MAJOR_VERSION_2) {
+    CryptoNote::TransactionExtraMergeMiningTag mmTag;
+    mmTag.depth = 0;
+    mmTag.merkleRoot = cachedBlock.getAuxiliaryBlockHeaderHash();
+
+    blockTemplate.parentBlock.baseTransaction.extra.clear();
+    if (!CryptoNote::appendMergeMiningTagToExtra(blockTemplate.parentBlock.baseTransaction.extra, mmTag)) {
+      throw std::runtime_error("Couldn't append merge mining tag");
+    }
+  }
 }
 
 }

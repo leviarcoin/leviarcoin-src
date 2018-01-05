@@ -17,10 +17,7 @@
 
 #pragma once
 #include "CryptoNoteProtocol/CryptoNoteProtocolDefinitions.h"
-#include "CryptoNoteCore/CryptoNoteBasic.h"
-#include "crypto/hash.h"
 #include "Rpc/CoreRpcServerCommandsDefinitions.h"
-#include "WalletRpcServerErrorCodes.h"
 
 namespace Tools
 {
@@ -46,6 +43,20 @@ using CryptoNote::ISerializer;
         KV_MEMBER(available_balance)
       }
     };
+  };
+
+  struct COMMAND_RPC_GET_ADDRESS
+  {
+	  typedef CryptoNote::EMPTY_STRUCT request;
+
+	  struct response
+	  {
+		  std::string address;
+
+		  void serialize(ISerializer& s) {
+			  KV_MEMBER(address)
+		  }
+	  };
   };
 
   struct transfer_destination
@@ -137,6 +148,7 @@ using CryptoNote::ISerializer;
     uint64_t amount;
     uint64_t fee;
     std::string paymentId;
+	std::string extra;
     std::string address;
     uint64_t blockIndex;
     uint64_t unlockTime;
@@ -148,6 +160,7 @@ using CryptoNote::ISerializer;
       KV_MEMBER(amount)
       KV_MEMBER(fee)
       KV_MEMBER(paymentId)
+	  KV_MEMBER(extra)
       KV_MEMBER(address)
       KV_MEMBER(blockIndex)
       KV_MEMBER(unlockTime)
@@ -179,8 +192,13 @@ using CryptoNote::ISerializer;
   };
 
   struct COMMAND_RPC_RESET {
-    typedef CryptoNote::EMPTY_STRUCT request;
-    typedef CryptoNote::EMPTY_STRUCT response;
+	  typedef CryptoNote::EMPTY_STRUCT request;
+	  typedef CryptoNote::EMPTY_STRUCT response;
+  };
+
+  struct COMMAND_RPC_SHUTDOWN {
+	  typedef CryptoNote::EMPTY_STRUCT request;
+	  typedef CryptoNote::EMPTY_STRUCT response;
   };
 }
 }

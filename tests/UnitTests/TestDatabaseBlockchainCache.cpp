@@ -173,7 +173,7 @@ TEST_F(DatabaseBlockchainCacheTests, RawBlocksWithTxsSerialization) {
 
   CryptoNote::RawBlock rawBlock{ toBinaryArray(lastBlock), {} };
   ASSERT_NO_THROW(std::transform(std::begin(lastBlock.transactionHashes), std::end(lastBlock.transactionHashes), std::back_inserter(rawBlock.transactions),
-  [&](const Crypto::Hash& txHash) { 
+  [&](const Crypto::Hash& txHash) {
     return toBinaryArray(generator.getTransactionByHash(txHash));
   }));
 

@@ -19,6 +19,8 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include <boost/thread.hpp>
+#include <boost/chrono.hpp>
 
 #include "DaemonCommandsHandler.h"
 
@@ -41,11 +43,16 @@
 #include "P2p/NetNodeConfig.h"
 #include "Rpc/RpcServer.h"
 #include "Rpc/RpcServerConfig.h"
+#include "Rpc/HttpClient.h"
 #include "Serialization/BinaryInputStreamSerializer.h"
 #include "Serialization/BinaryOutputStreamSerializer.h"
 #include "version.h"
 
 #include <Logging/LoggerManager.h>
+
+#ifndef AUTO_VAL_INIT
+#define AUTO_VAL_INIT(n) boost::value_initialized<decltype(n)>()
+#endif
 
 #if defined(WIN32)
 #include <crtdbg.h>
@@ -63,7 +70,8 @@ namespace
   const command_line::arg_descriptor<bool>        arg_os_version  = {"os-version", ""};
   const command_line::arg_descriptor<std::string> arg_log_file    = {"log-file", "", ""};
   const command_line::arg_descriptor<int>         arg_log_level   = {"log-level", "", 2}; // info level
-  const command_line::arg_descriptor<bool>        arg_console     = {"no-console", "Disable daemon console commands"};
+  const command_line::arg_descriptor<bool>        arg_console = { "no-console", "Disable daemon console commands" };
+  const command_line::arg_descriptor<bool>        arg_guihelpers = { "gui-helpers", "Activate GUI helpers" };
   const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
     "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
 }
@@ -87,6 +95,37 @@ JsonValue buildLoggerConfiguration(Level level, const std::string& logfile) {
   consoleLogger.insert("pattern", "%D %T %L ");
 
   return loggerConfiguration;
+}
+
+void wait(int seconds) {
+	boost::this_thread::sleep_for(boost::chrono::seconds{ seconds });
+}
+
+COMMAND_RPC_GET_INFO::response get_daemon_info(Core &m_core, NodeServer &m_p2p, CryptoNoteProtocolHandler &m_protocol) {
+	COMMAND_RPC_GET_INFO::response res;
+	res.height = m_core.getTopBlockIndex() + 1;
+	res.outgoing_connections_count = m_p2p.get_outgoing_connections_count();
+	res.incoming_connections_count = m_p2p.get_connections_count() - res.outgoing_connections_count;
+	res.last_known_block_index = std::max(static_cast<uint32_t>(1), m_protocol.getObservedHeight()) - 1;
+	return res;
+}
+
+void gui_helper(std::string datadir, Core &m_core, NodeServer &m_p2p, CryptoNoteProtocolHandler &m_protocol) {
+	boost::this_thread::interruption_enabled();
+	// Write file
+	const std::string file_name = datadir + "STATUS";
+	std::ofstream file_stream;
+	while (true) {
+		if (!file_stream.is_open()) file_stream.open(file_name);
+		CryptoNote::COMMAND_RPC_GET_INFO::response getInfoResp = AUTO_VAL_INIT(getInfoResp);
+		COMMAND_RPC_GET_INFO::response res = get_daemon_info(m_core, m_p2p, m_protocol);
+
+		file_stream << res.last_known_block_index << "|" << res.height << "|" << res.incoming_connections_count;
+		file_stream.close();
+
+		boost::this_thread::interruption_point();
+		wait(1);
+	}
 }
 
 int main(int argc, char* argv[])
@@ -113,7 +152,8 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_log_file);
     command_line::add_arg(desc_cmd_sett, arg_log_level);
     command_line::add_arg(desc_cmd_sett, arg_console);
-    command_line::add_arg(desc_cmd_sett, arg_testnet_on);
+	command_line::add_arg(desc_cmd_sett, arg_testnet_on);
+	command_line::add_arg(desc_cmd_sett, arg_guihelpers);
 
     RpcServerConfig::initOptions(desc_cmd_sett);
     NetNodeConfig::initOptions(desc_cmd_sett);
@@ -240,7 +280,7 @@ int main(int argc, char* argv[])
       dispatcher,
       std::unique_ptr<IBlockchainCacheFactory>(new DatabaseBlockchainCacheFactory(database, logger.getLogger())),
       createSwappedMainChainStorage(data_dir_path.string(), currency));
-
+	
     ccore.load();
     logger(INFO) << "Core initialized OK";
 
@@ -271,9 +311,22 @@ int main(int argc, char* argv[])
       p2psrv.sendStopSignal();
     });
 
+	boost::thread t;
+	if (command_line::has_arg(vm, arg_guihelpers)) {
+		// Start thread
+		logger(INFO) << "Starting GUI helper... " << data_dir_path.string();
+		boost::thread t(boost::bind(&gui_helper, data_dir_path.string(), boost::ref(ccore), boost::ref(p2psrv), boost::ref(cprotocol)));
+		t.detach();
+	}
+	
     logger(INFO) << "Starting p2p net loop...";
     p2psrv.run();
     logger(INFO) << "p2p net loop stopped";
+
+	if (command_line::has_arg(vm, arg_guihelpers)) {
+		t.interrupt();
+		logger(INFO) << "GUI helper stopped";
+	}
 
     dch.stop_handling();
 

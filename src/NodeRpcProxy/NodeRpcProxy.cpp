@@ -107,8 +107,8 @@ void NodeRpcProxy::init(const INode::Callback& callback) {
 
   m_state = STATE_INITIALIZING;
   resetInternalState();
-  m_workerThread = std::thread([this, callback] { 
-    workerThread(callback); 
+  m_workerThread = std::thread([this, callback] {
+    workerThread(callback);
   });
 }
 
@@ -452,17 +452,6 @@ void NodeRpcProxy::getPoolSymmetricDifference(std::vector<Crypto::Hash>&& knownP
 
   scheduleRequest([this, knownPoolTxIds, knownBlockId, &isBcActual, &newTxs, &deletedTxIds] () mutable -> std::error_code {
     return this->doGetPoolSymmetricDifference(std::move(knownPoolTxIds), knownBlockId, isBcActual, newTxs, deletedTxIds); } , callback);
-}
-
-void NodeRpcProxy::getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t gindex, MultisignatureOutput& out, const Callback& callback) {
-  std::lock_guard<std::mutex> lock(m_mutex);
-  if (m_state != STATE_INITIALIZED) {
-    callback(make_error_code(error::NOT_INITIALIZED));
-    return;
-  }
-
-  // TODO NOT IMPLEMENTED
-  callback(std::error_code());
 }
 
 void NodeRpcProxy::getBlocks(const std::vector<uint32_t>& blockHeights, std::vector<std::vector<BlockDetails>>& blocks, const Callback& callback) {

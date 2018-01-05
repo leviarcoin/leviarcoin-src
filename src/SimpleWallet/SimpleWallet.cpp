@@ -74,6 +74,7 @@ const command_line::arg_descriptor<std::string> arg_password = { "password", "Wa
 const command_line::arg_descriptor<uint16_t> arg_daemon_port = { "daemon-port", "Use daemon instance at port <arg> instead of 8081", 0 };
 const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", INFO, true };
 const command_line::arg_descriptor<bool> arg_testnet = { "testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false };
+const command_line::arg_descriptor<bool> arg_guihelpers = { "gui-helpers", "Activate GUI helpers", false };
 const command_line::arg_descriptor< std::vector<std::string> > arg_command = { "command", "" };
 
 
@@ -506,6 +507,7 @@ bool simple_wallet::set_log(const std::vector<std::string> &args) {
   logManager.setMaxLevel(static_cast<Logging::Level>(l));
   return true;
 }
+
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::init(const boost::program_options::variables_map& vm) {
   handle_command_line(vm);
@@ -546,6 +548,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
     } else {
       m_wallet_file_arg = userInput;
     }
+	m_wallet_file_gui = userInput;
   }
 
   if (!m_generate_new.empty() && !m_wallet_file_arg.empty()) {
@@ -1064,6 +1067,82 @@ void simple_wallet::printConnectionError() const {
   fail_msg_writer() << "wallet failed to connect to daemon (" << m_daemon_address << ").";
 }
 
+std::string simple_wallet::getWalletFile() {
+	return m_wallet_file_gui;
+}
+
+std::string simple_wallet::getBalance() {
+	std::string balance = m_currency.formatAmount(m_wallet->actualBalance());
+	std::string locked = m_currency.formatAmount(m_wallet->pendingBalance());
+	return balance + "|" + locked;
+}
+
+std::string simple_wallet::getTxs() {
+	std::string txs = "";
+
+	size_t transactionsCount = m_wallet->getTransactionCount();
+	for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
+		WalletLegacyTransaction txInfo;
+		m_wallet->getTransaction(trantransactionNumber, txInfo);
+		if (txInfo.state != WalletLegacyTransactionState::Active || txInfo.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
+			continue;
+		}
+
+		std::vector<uint8_t> extraVec = Common::asBinaryArray(txInfo.extra);
+
+		Crypto::Hash paymentId;
+		std::string paymentIdStr = (getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId != NULL_HASH ? Common::podToHex(paymentId) : "");
+
+		char timeString[TIMESTAMP_MAX_WIDTH + 1];
+		time_t timestamp = static_cast<time_t>(txInfo.timestamp);
+		if (std::strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", std::gmtime(&timestamp)) == 0) {
+			throw std::runtime_error("time buffer is too small");
+		}
+
+		txs += std::string(timeString)
+			+ "|" + Common::podToHex(txInfo.hash)
+			+ "|" + m_currency.formatAmount(txInfo.totalAmount)
+			+ "|" + m_currency.formatAmount(txInfo.fee)
+			+ "|" + std::string(std::to_string(txInfo.blockHeight))
+			+ "|" + std::string(std::to_string(txInfo.unlockTime));
+
+		if (!paymentIdStr.empty()) {
+			txs += "|" + paymentIdStr;
+		}
+		txs += "\n";
+	}
+	return txs;
+}
+
+void wait(int seconds) {
+	boost::this_thread::sleep_for(boost::chrono::seconds{ seconds });
+}
+
+void gui_helper(std::string m_wallet_file_gui, simple_wallet &wallet) {
+	boost::this_thread::interruption_enabled();
+	const std::string file_name_status = m_wallet_file_gui + ".status";
+	const std::string file_name_txs = m_wallet_file_gui + ".txs";
+	std::ofstream file_stream_status;
+	std::ofstream file_stream_txs;
+
+	while (true) {
+		// get data
+		std::string balance = wallet.getBalance();
+		std::string txs = wallet.getTxs();
+
+		// write on files
+		if (!file_stream_status.is_open()) file_stream_status.open(file_name_status);
+		file_stream_status << balance;
+		file_stream_status.close();
+
+		if (!file_stream_txs.is_open()) file_stream_txs.open(file_name_txs);
+		file_stream_txs << txs;
+		file_stream_txs.close();
+
+		boost::this_thread::interruption_point();
+		wait(2);
+	}
+}
 
 int main(int argc, char* argv[]) {
 #ifdef WIN32
@@ -1084,6 +1163,7 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_command);
   command_line::add_arg(desc_params, arg_log_level);
   command_line::add_arg(desc_params, arg_testnet);
+  command_line::add_arg(desc_params, arg_guihelpers);
   Tools::wallet_rpc_server::init_options(desc_params);
 
   po::positional_options_description positional_options;
@@ -1226,8 +1306,25 @@ int main(int argc, char* argv[]) {
     
     if (!wal.init(vm)) {
       logger(ERROR, BRIGHT_RED) << "Failed to initialize wallet"; 
-      return 1; 
+      return 1;
     }
+
+	bool gui_helpers = command_line::get_arg(vm, arg_guihelpers);
+	boost::thread t;
+	if (gui_helpers) {
+		std::string wallet_file = wal.getWalletFile();
+		try {
+			// Start thread
+			//boost::thread t(&gui_helper);
+			boost::thread t(boost::bind(&gui_helper, wallet_file, boost::ref(wal)));
+			t.detach();
+			logger(INFO) << "GUI helper started: " << wallet_file;
+		}
+		catch (const std::exception& e) {
+			logger(ERROR, BRIGHT_RED) << "failed start GUI helper: " << e.what();
+			return 1;
+		}
+	}
 
     std::vector<std::string> command = command_line::get_arg(vm, arg_command);
     if (!command.empty())
@@ -1242,6 +1339,17 @@ int main(int argc, char* argv[]) {
     if (!wal.deinit()) {
       logger(ERROR, BRIGHT_RED) << "Failed to close wallet";
     } else {
+		if (gui_helpers) {
+			try {
+				// Stop thread
+				t.interrupt();
+				logger(INFO) << "GUI helper stopped.";
+			}
+			catch (const std::exception& e) {
+				logger(ERROR, BRIGHT_RED) << "failed to stop GUI helper: " << e.what();
+				return 1;
+			}
+		}
       logger(INFO) << "Wallet closed";
     }
   }

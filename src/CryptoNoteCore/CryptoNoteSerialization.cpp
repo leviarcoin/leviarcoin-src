@@ -49,7 +49,6 @@ size_t getSignaturesCount(const TransactionInput& input) {
   struct txin_signature_size_visitor : public boost::static_visitor < size_t > {
     size_t operator()(const BaseInput& txin) const { return 0; }
     size_t operator()(const KeyInput& txin) const { return txin.outputIndexes.size(); }
-    size_t operator()(const MultisignatureInput& txin) const { return txin.signatureCount; }
   };
 
   return boost::apply_visitor(txin_signature_size_visitor(), input);
@@ -58,9 +57,7 @@ size_t getSignaturesCount(const TransactionInput& input) {
 struct BinaryVariantTagGetter: boost::static_visitor<uint8_t> {
   uint8_t operator()(const CryptoNote::BaseInput) { return  0xff; }
   uint8_t operator()(const CryptoNote::KeyInput) { return  0x2; }
-  uint8_t operator()(const CryptoNote::MultisignatureInput) { return  0x3; }
   uint8_t operator()(const CryptoNote::KeyOutput) { return  0x2; }
-  uint8_t operator()(const CryptoNote::MultisignatureOutput) { return  0x3; }
   uint8_t operator()(const CryptoNote::Transaction) { return  0xcc; }
   uint8_t operator()(const CryptoNote::BlockTemplate) { return  0xbb; }
 };
@@ -89,12 +86,6 @@ void getVariantValue(CryptoNote::ISerializer& serializer, uint8_t tag, CryptoNot
     in = v;
     break;
   }
-  case 0x3: {
-    CryptoNote::MultisignatureInput v;
-    serializer(v, "value");
-    in = v;
-    break;
-  }
   default:
     throw std::runtime_error("Unknown variant tag");
   }
@@ -104,12 +95,6 @@ void getVariantValue(CryptoNote::ISerializer& serializer, uint8_t tag, CryptoNot
   switch(tag) {
   case 0x2: {
     CryptoNote::KeyOutput v;
-    serializer(v, "data");
-    out = v;
-    break;
-  }
-  case 0x3: {
-    CryptoNote::MultisignatureOutput v;
     serializer(v, "data");
     out = v;
     break;
@@ -277,12 +262,6 @@ void serialize(KeyInput& key, ISerializer& serializer) {
   serializer(key.keyImage, "k_image");
 }
 
-void serialize(MultisignatureInput& multisignature, ISerializer& serializer) {
-  serializer(multisignature.amount, "amount");
-  serializer(multisignature.signatureCount, "signatures");
-  serializer(multisignature.outputIndex, "outputIndex");
-}
-
 void serialize(TransactionOutput& output, ISerializer& serializer) {
   serializer(output.amount, "amount");
   serializer(output.target, "target");
@@ -306,11 +285,6 @@ void serialize(TransactionOutputTarget& output, ISerializer& serializer) {
 
 void serialize(KeyOutput& key, ISerializer& serializer) {
   serializer(key.key, "key");
-}
-
-void serialize(MultisignatureOutput& multisignature, ISerializer& serializer) {
-  serializer(multisignature.keys, "keys");
-  serializer(multisignature.requiredSignatureCount, "required_signatures");
 }
 
 void serialize(ParentBlockSerializer& pbs, ISerializer& serializer) {
@@ -388,9 +362,16 @@ void serialize(ParentBlockSerializer& pbs, ISerializer& serializer) {
 void serializeBlockHeader(BlockHeader& header, ISerializer& serializer) {
   serializer(header.majorVersion, "major_version");
   serializer(header.minorVersion, "minor_version");
-  serializer(header.timestamp, "timestamp");
-  serializer(header.previousBlockHash, "prev_id");
-  serializer.binary(&header.nonce, sizeof(header.nonce), "nonce");
+
+  if (header.majorVersion == BLOCK_MAJOR_VERSION_1) {
+    serializer(header.timestamp, "timestamp");
+    serializer(header.previousBlockHash, "prev_id");
+    serializer.binary(&header.nonce, sizeof(header.nonce), "nonce");
+  } else if (header.majorVersion >= BLOCK_MAJOR_VERSION_2) {
+    serializer(header.previousBlockHash, "prev_id");
+  } else {
+    throw std::runtime_error("Wrong major version");
+  }
 }
 
 void serialize(BlockHeader& header, ISerializer& serializer) {
@@ -399,6 +380,12 @@ void serialize(BlockHeader& header, ISerializer& serializer) {
 
 void serialize(BlockTemplate& block, ISerializer& serializer) {
   serializeBlockHeader(block, serializer);
+
+  if (block.majorVersion >= BLOCK_MAJOR_VERSION_2) {
+    auto parentBlockSerializer = makeParentBlockSerializer(block, false, false);
+    serializer(parentBlockSerializer, "parent_block");
+  }
+  
   serializer(block.baseTransaction, "miner_tx");
   serializer(block.transactionHashes, "tx_hashes");
 }

@@ -23,6 +23,8 @@
 #include <mutex>
 
 #include <boost/program_options/variables_map.hpp>
+#include <boost/thread.hpp>
+#include <boost/chrono.hpp>
 
 #include "IWalletLegacy.h"
 #include "PasswordContainer.h"
@@ -58,6 +60,10 @@ namespace CryptoNote
 
     const CryptoNote::Currency& currency() const { return m_currency; }
 
+	std::string getWalletFile();
+	std::string getBalance();
+	std::string getTxs();
+
   private:
 
     Logging::LoggerMessage success_msg_writer(bool color = false) {
@@ -92,9 +98,7 @@ namespace CryptoNote
     bool save(const std::vector<std::string> &args);
     bool reset(const std::vector<std::string> &args);
     bool set_log(const std::vector<std::string> &args);
-
-    bool ask_wallet_create_if_needed();
-
+	bool ask_wallet_create_if_needed();
     void printConnectionError() const;
 
     //---------------- IWalletLegacyObserver -------------------------
@@ -108,7 +112,8 @@ namespace CryptoNote
     virtual void connectionStatusUpdated(bool connected) override;
     //----------------------------------------------------------
 
-    friend class refresh_progress_reporter_t;
+    friend class 
+		_progress_reporter_t;
 
     class refresh_progress_reporter_t
     {
@@ -159,6 +164,7 @@ namespace CryptoNote
     std::string m_daemon_address;
     std::string m_daemon_host;
     uint16_t m_daemon_port;
+	std::string m_wallet_file_gui;
 
     std::string m_wallet_file;
 
@@ -177,5 +183,6 @@ namespace CryptoNote
     bool m_walletSynchronized;
     std::mutex m_walletSynchronizedMutex;
     std::condition_variable m_walletSynchronizedCV;
+
   };
 }

@@ -261,7 +261,7 @@ public:
   CurrencyBuilder& blocksFileName(const std::string& val) { m_currency.m_blocksFileName = val; return *this; }
   CurrencyBuilder& blockIndexesFileName(const std::string& val) { m_currency.m_blockIndexesFileName = val; return *this; }
   CurrencyBuilder& txPoolFileName(const std::string& val) { m_currency.m_txPoolFileName = val; return *this; }
-  
+
   CurrencyBuilder& testnet(bool val) { m_currency.m_testnet = val; return *this; }
 
 private:

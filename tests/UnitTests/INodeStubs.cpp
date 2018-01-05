@@ -92,12 +92,6 @@ TransactionDetails toDetails(Transaction tx, const Crypto::Hash& blockHash, uint
                    } else if (ti.type() == typeid(BaseInput)) {
                      auto bi = boost::get<BaseInput>(ti);
                      return TransactionInputDetails{BaseInputDetails{bi, 0}}; // TODO
-                   } else if (ti.type() == typeid(MultisignatureInput)) {
-                     auto mi = boost::get<MultisignatureInput>(ti);
-                     td.totalInputsAmount += mi.amount;
-                     MultisignatureInputDetails det;
-                     det.input = mi;
-                     return TransactionInputDetails{det};
                    } else {
                      assert(false);
                      throw std::runtime_error("unknown type");
@@ -146,7 +140,7 @@ void INodeTrivialRefreshStub::doGetNewBlocks(std::vector<Crypto::Hash> knownBloc
   auto start = blockchain.end();
 
   for (const auto& id : knownBlockIds) {
-    start = std::find_if(blockchain.begin(), blockchain.end(), 
+    start = std::find_if(blockchain.begin(), blockchain.end(),
       [&id](BlockTemplate& block) { return CachedBlock(block).getBlockHash() == id; });
     if (start != blockchain.end())
       break;
@@ -159,7 +153,7 @@ void INodeTrivialRefreshStub::doGetNewBlocks(std::vector<Crypto::Hash> knownBloc
   }
 
   m_lastHeight = static_cast<uint32_t>(std::distance(blockchain.begin(), start));
-  startHeight = m_lastHeight; 
+  startHeight = m_lastHeight;
 
   for (; m_lastHeight < blockchain.size(); ++m_lastHeight)
   {
@@ -319,7 +313,7 @@ void INodeTrivialRefreshStub::queryBlocks(std::vector<Crypto::Hash>&& knownBlock
       for (const auto& txBlob: item.transactions) {
         try {
           CachedTransaction cachedTransaction{txBlob};
-          
+
           TransactionShortInfo tsi;
           tsi.txId = cachedTransaction.getTransactionHash();
           tsi.txPrefix = cachedTransaction.getTransaction();
@@ -460,8 +454,8 @@ void INodeTrivialRefreshStub::doGetBlocks(const std::vector<Crypto::Hash>& block
 
   for (const Crypto::Hash& hash: blockHashes) {
     auto iter = std::find_if(
-        m_blockchainGenerator.getBlockchain().begin(), 
-        m_blockchainGenerator.getBlockchain().end(), 
+        m_blockchainGenerator.getBlockchain().begin(),
+        m_blockchainGenerator.getBlockchain().end(),
         [&hash](const BlockTemplate& block) -> bool {
           return hash == CachedBlock(block).getBlockHash();
         }
@@ -495,8 +489,8 @@ void INodeTrivialRefreshStub::doGetBlocks(uint64_t timestampBegin, uint64_t time
 
   for (const auto& hash: blockHashes) {
     auto iter = std::find_if(
-        m_blockchainGenerator.getBlockchain().begin(), 
-        m_blockchainGenerator.getBlockchain().end(), 
+        m_blockchainGenerator.getBlockchain().begin(),
+        m_blockchainGenerator.getBlockchain().end(),
         [&hash](const BlockTemplate& block) -> bool {
           return hash == CachedBlock(block).getBlockHash();
         }
@@ -516,11 +510,11 @@ void INodeTrivialRefreshStub::doGetBlocks(uint64_t timestampBegin, uint64_t time
   callback(std::error_code());
 */
 }
-  
+
 void INodeTrivialRefreshStub::doGetTransactionsByPaymentId(const Crypto::Hash& paymentId, std::vector<CryptoNote::TransactionDetails>& transactions, const Callback& callback) {
   assert(false);
 }
-  
+
 void INodeTrivialRefreshStub::getTransactions(const std::vector<Crypto::Hash>& transactionHashes, std::vector<TransactionDetails>& transactions, const Callback& callback) {
   m_asyncCounter.addAsyncContext();
 
@@ -572,26 +566,4 @@ void INodeTrivialRefreshStub::sendPoolChanged() {
 
 void INodeTrivialRefreshStub::sendLocalBlockchainUpdated(){
   observerManager.notify(&INodeObserver::localBlockchainUpdated, getLastLocalBlockHeight());
-}
-
-void INodeTrivialRefreshStub::getMultisignatureOutputByGlobalIndex(uint64_t amount, uint32_t gindex, CryptoNote::MultisignatureOutput& out, const Callback& callback) {
-  m_asyncCounter.addAsyncContext();
-  std::unique_lock<std::mutex> lock(m_walletLock);
-  std::thread task(&INodeTrivialRefreshStub::doGetOutByMSigGIndex, this, amount, gindex, std::ref(out), callback);
-  task.detach();
-}
-
-void INodeTrivialRefreshStub::doGetOutByMSigGIndex(uint64_t amount, uint32_t gindex, CryptoNote::MultisignatureOutput& out, const Callback& callback) {
-  ContextCounterHolder counterHolder(m_asyncCounter);
-  std::unique_lock<std::mutex> lock(m_walletLock);
-
-  bool success = m_blockchainGenerator.getMultisignatureOutputByGlobalIndex(amount, gindex, out);
-
-  lock.unlock();
-
-  if (success) {
-    callback(std::error_code());
-  } else {
-    callback(std::make_error_code(std::errc::invalid_argument));
-  }
 }

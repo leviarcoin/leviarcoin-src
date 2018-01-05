@@ -1,3 +1,9 @@
+Release notes 2.1.2
+- Increased block size Hard Fork set at block 250000
+- Updated crawler public key
+- Daemon stability improvements
+- New GUI helpers
+
 Release notes 2.1.1
 
 - Updated RocksDB to release 4.11.2

@@ -65,13 +65,6 @@ public:
         if (!inserted.second) {
           return true;
         }
-      } else if (input.type() == typeid(MultisignatureInput)) {
-        const auto& multisignature = boost::get<MultisignatureInput>(input);
-        auto inserted =
-            alreadySpentMultisignatures.insert(std::make_pair(multisignature.amount, multisignature.outputIndex));
-        if (!inserted.second) {
-          return true;
-        }
       }
     }
 
@@ -80,7 +73,6 @@ public:
 
 private:
   std::unordered_set<Crypto::KeyImage> alreadSpentKeyImages;
-  std::set<std::pair<uint64_t, uint64_t>> alreadySpentMultisignatures;
 };
 
 inline IBlockchainCache* findIndexInChain(IBlockchainCache* blockSegment, const Crypto::Hash& blockHash) {
@@ -138,10 +130,6 @@ TransactionValidatorState extractSpentOutputs(const CachedTransaction& transacti
     if (input.type() == typeid(KeyInput)) {
       const KeyInput& in = boost::get<KeyInput>(input);
       bool r = spentOutputs.spentKeyImages.insert(in.keyImage).second;
-      assert(r);
-    } else if (input.type() == typeid(MultisignatureInput)) {
-      const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
-      bool r = spentOutputs.spentMultisignatureGlobalIndexes.insert(std::make_pair(in.amount, in.outputIndex)).second;
       assert(r);
     } else {
       assert(false);
@@ -207,6 +195,8 @@ Core::Core(const Currency& currency, Logging::ILogger& logger, Checkpoints&& che
     : currency(currency), dispatcher(dispatcher), contextGroup(dispatcher), logger(logger, "Core"), checkpoints(std::move(checkpoints)),
       upgradeManager(new UpgradeManager()), blockchainCacheFactory(std::move(blockchainCacheFactory)),
       mainChainStorage(std::move(mainchainStorage)), initialized(false) {
+        
+  upgradeManager->addMajorBlockVersion(BLOCK_MAJOR_VERSION_2, currency.upgradeHeight(BLOCK_MAJOR_VERSION_2));
 
   transactionPool = std::unique_ptr<ITransactionPoolCleanWrapper>(new TransactionPoolCleanWrapper(
     std::unique_ptr<ITransactionPool>(new TransactionPool(logger)),
@@ -605,9 +595,13 @@ std::error_code Core::addBlock(const CachedBlock& cachedBlock, RawBlock&& rawBlo
 
   if (!currency.getBlockReward(cachedBlock.getBlock().majorVersion, blocksSizeMedian,
                                cumulativeBlockSize, alreadyGeneratedCoins, cumulativeFee, reward, emissionChange)) {
+
+
     logger(Logging::WARNING) << "Block " << cachedBlock.getBlockHash() << " has too big cumulative size";
     return error::BlockValidationError::CUMULATIVE_BLOCK_SIZE_TOO_BIG;
   }
+
+
 
   if (minerReward != reward) {
     logger(Logging::WARNING) << "Block reward mismatch for block " << cachedBlock.getBlockHash()
@@ -750,7 +744,7 @@ void Core::actualizePoolTransactionsLite(const TransactionValidatorState& valida
   for (auto& hash : hashes) {
     auto tx = pool.getTransaction(hash);
     auto txState = extractSpentOutputs(tx);
-    
+
     if (hasIntersections(validatorState, txState) || tx.getTransactionBinaryArray().size() > getMaximumTransactionAllowedSize(blockMedianSize, currency)) {
       pool.removeTransaction(hash);
       notifyObservers(makeDelTransactionMessage({ hash }, Messages::DeleteTransaction::Reason::NotActual));
@@ -960,18 +954,6 @@ bool Core::isTransactionValidForPool(const CachedTransaction& cachedTransaction,
   return true;
 }
 
-boost::optional<std::pair<MultisignatureOutput, uint64_t>> Core::getMultisignatureOutput(uint64_t amount,
-                                                                                         uint32_t globalIndex) const {
-  throwIfNotInitialized();
-
-  MultisignatureOutput output;
-  uint64_t unlockTime;
-  if (chainsLeaves[0]->getMultisignatureOutputIfExists(amount, globalIndex, output, unlockTime)) {
-    return {{output, unlockTime}};
-  }
-  return {};
-}
-
 std::vector<Crypto::Hash> Core::getPoolTransactionHashes() const {
   throwIfNotInitialized();
 
@@ -1026,8 +1008,28 @@ bool Core::getBlockTemplate(BlockTemplate& b, const AccountPublicAddress& adr, c
   }
 
   b = boost::value_initialized<BlockTemplate>();
-  b.majorVersion = BLOCK_MAJOR_VERSION_1;
+  //b.majorVersion = BLOCK_MAJOR_VERSION_1;
+  //b.minorVersion = BLOCK_MINOR_VERSION_0;
+
+  b.majorVersion = getBlockMajorVersionForHeight(height);
   b.minorVersion = BLOCK_MINOR_VERSION_0;
+
+  if (b.majorVersion >= BLOCK_MAJOR_VERSION_2) {
+    //b.parentBlock.majorVersion = getBlockMajorVersionForHeight(height - 1);
+
+    TransactionExtraMergeMiningTag mmTag = boost::value_initialized<decltype(mmTag)>();
+    if (!appendMergeMiningTagToExtra(b.parentBlock.baseTransaction.extra, mmTag)) {
+      logger(Logging::ERROR, Logging::BRIGHT_RED)
+          << "Failed to append merge mining tag to extra of the parent block miner transaction";
+      return false;
+    }
+
+    b.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
+    b.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
+    b.parentBlock.transactionCount = 1;
+  }
+
+
   b.previousBlockHash = getTopBlockHash();
   b.timestamp = time(nullptr);
 
@@ -1244,46 +1246,6 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
           return error::TransactionValidationError::INPUT_INVALID_SIGNATURES;
         }
       }
-
-    } else if (input.type() == typeid(MultisignatureInput)) {
-      const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
-      MultisignatureOutput output;
-      uint64_t unlockTime = 0;
-      if (!state.spentMultisignatureGlobalIndexes.insert(std::make_pair(in.amount, in.outputIndex)).second) {
-        return error::TransactionValidationError::INPUT_MULTISIGNATURE_ALREADY_SPENT;
-      }
-
-      if (!cache->getMultisignatureOutputIfExists(in.amount, in.outputIndex, blockIndex, output, unlockTime)) {
-        return error::TransactionValidationError::INPUT_INVALID_GLOBAL_INDEX;
-      }
-
-      if (cache->checkIfSpentMultisignature(in.amount, in.outputIndex, blockIndex)) {
-        return error::TransactionValidationError::INPUT_MULTISIGNATURE_ALREADY_SPENT;
-      }
-
-      if (!cache->isTransactionSpendTimeUnlocked(unlockTime, blockIndex)) {
-        return error::TransactionValidationError::INPUT_SPEND_LOCKED_OUT;
-      }
-
-      if (output.requiredSignatureCount != in.signatureCount) {
-        return error::TransactionValidationError::INPUT_WRONG_SIGNATURES_COUNT;
-      }
-
-      size_t inputSignatureIndex = 0;
-      size_t outputKeyIndex = 0;
-      while (inputSignatureIndex < in.signatureCount) {
-        if (outputKeyIndex == output.keys.size()) {
-          return error::TransactionValidationError::INPUT_INVALID_SIGNATURES;
-        }
-
-        if (Crypto::check_signature(cachedTransaction.getTransactionPrefixHash(), output.keys[outputKeyIndex],
-                                    transaction.signatures[inputIndex][inputSignatureIndex])) {
-          ++inputSignatureIndex;
-        }
-
-        ++outputKeyIndex;
-      }
-
     } else {
       assert(false);
       return error::TransactionValidationError::INPUT_UNKNOWN_TYPE;
@@ -1309,17 +1271,6 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
     if (output.target.type() == typeid(KeyOutput)) {
       if (!check_key(boost::get<KeyOutput>(output.target).key)) {
         return error::TransactionValidationError::OUTPUT_INVALID_KEY;
-      }
-    } else if (output.target.type() == typeid(MultisignatureOutput)) {
-      const MultisignatureOutput& multisignatureOutput = ::boost::get<MultisignatureOutput>(output.target);
-      if (multisignatureOutput.requiredSignatureCount > multisignatureOutput.keys.size()) {
-        return error::TransactionValidationError::OUTPUT_INVALID_REQUIRED_SIGNATURES_COUNT;
-      }
-
-      for (const PublicKey& key : multisignatureOutput.keys) {
-        if (!check_key(key)) {
-          return error::TransactionValidationError::OUTPUT_INVALID_MULTISIGNATURE_KEY;
-        }
       }
     } else {
       return error::TransactionValidationError::OUTPUT_UNKNOWN_TYPE;
@@ -1351,12 +1302,6 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
       // outputIndexes are packed here, first is absolute, others are offsets to previous,
       // so first can be zero, others can't
       if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
-        return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
-      }
-    } else if (input.type() == typeid(MultisignatureInput)) {
-      const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
-      amount = in.amount;
-      if (!outputsUsage.insert(std::make_pair(in.amount, in.outputIndex)).second) {
         return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
       }
     } else {
@@ -1406,6 +1351,19 @@ std::error_code Core::validateBlock(const CachedBlock& cachedBlock, IBlockchainC
     return error::BlockValidationError::WRONG_VERSION;
   }
 
+  if (block.majorVersion >= BLOCK_MAJOR_VERSION_2) {
+    if (block.majorVersion == BLOCK_MAJOR_VERSION_2 && block.parentBlock.majorVersion > BLOCK_MAJOR_VERSION_1) {
+      logger(Logging::ERROR, Logging::BRIGHT_RED) << "Parent block of block " << cachedBlock.getBlockHash() << " has wrong major version: "
+                                << static_cast<int>(block.parentBlock.majorVersion) << ", at index " << cachedBlock.getBlockIndex()
+                                << " expected version is " << static_cast<int>(BLOCK_MAJOR_VERSION_1);
+      return error::BlockValidationError::PARENT_BLOCK_WRONG_VERSION;
+    }
+
+    if (cachedBlock.getParentBlockBinaryArray(false).size() > 2048) {
+      return error::BlockValidationError::PARENT_BLOCK_SIZE_TOO_BIG;
+    }
+  }
+
   if (block.timestamp > getAdjustedTime() + currency.blockFutureTimeLimit()) {
     return error::BlockValidationError::TIMESTAMP_TOO_FAR_IN_FUTURE;
   }
@@ -1442,17 +1400,6 @@ std::error_code Core::validateBlock(const CachedBlock& cachedBlock, IBlockchainC
     if (output.target.type() == typeid(KeyOutput)) {
       if (!check_key(boost::get<KeyOutput>(output.target).key)) {
         return error::TransactionValidationError::OUTPUT_INVALID_KEY;
-      }
-    } else if (output.target.type() == typeid(MultisignatureOutput)) {
-      const MultisignatureOutput& multisignatureOutput = ::boost::get<MultisignatureOutput>(output.target);
-      if (multisignatureOutput.requiredSignatureCount > multisignatureOutput.keys.size()) {
-        return error::TransactionValidationError::OUTPUT_INVALID_REQUIRED_SIGNATURES_COUNT;
-      }
-
-      for (const PublicKey& key : multisignatureOutput.keys) {
-        if (!check_key(key)) {
-          return error::TransactionValidationError::OUTPUT_INVALID_MULTISIGNATURE_KEY;
-        }
       }
     } else {
       return error::TransactionValidationError::OUTPUT_UNKNOWN_TYPE;
@@ -2138,14 +2085,6 @@ TransactionDetails Core::getTransactionDetails(const Crypto::Hash& transactionHa
       txInToKeyDetails.output.number = outputReferences.back().second;
       txInToKeyDetails.output.transactionHash = outputReferences.back().first;
       txInDetails = txInToKeyDetails;
-    } else if (transaction->getInputType(i) == TransactionTypes::InputType::Multisignature) {
-      MultisignatureInputDetails txInMultisigDetails;
-      txInMultisigDetails.input = boost::get<MultisignatureInput>(rawTransaction.inputs[i]);
-      std::pair<Crypto::Hash, size_t> outputReference = segment->getMultisignatureOutputReference(txInMultisigDetails.input.amount, txInMultisigDetails.input.outputIndex);
-
-      txInMultisigDetails.output.number = outputReference.second;
-      txInMultisigDetails.output.transactionHash = outputReference.first;
-      txInDetails = txInMultisigDetails;
     }
 
     assert(!txInDetails.empty());

@@ -17,17 +17,18 @@
 
 #include "WalletRpcServer.h"
 
-#include <fstream>
+//#include <fstream>
 
 #include "Common/CommandLine.h"
 #include "Common/StringTools.h"
 #include "CryptoNoteCore/CryptoNoteFormatUtils.h"
-#include "CryptoNoteCore/Account.h"
+//#include "CryptoNoteCore/Account.h"
 #include "crypto/hash.h"
 #include "WalletLegacy/WalletHelper.h"
 // #include "wallet_errors.h"
 
 #include "Rpc/JsonRpc.h"
+#include "WalletRpcServerErrorCodes.h"
 
 using namespace Logging;
 using namespace CryptoNote;
@@ -103,12 +104,14 @@ void wallet_rpc_server::processRequest(const CryptoNote::HttpRequest& request, C
 
     static std::unordered_map<std::string, JsonMemberMethod> s_methods = {
       { "getbalance", makeMemberMethod(&wallet_rpc_server::on_getbalance) },
+	  { "getaddress", makeMemberMethod(&wallet_rpc_server::on_getaddress) },
       { "transfer", makeMemberMethod(&wallet_rpc_server::on_transfer) },
       { "store", makeMemberMethod(&wallet_rpc_server::on_store) },
       { "get_payments", makeMemberMethod(&wallet_rpc_server::on_get_payments) },
       { "get_transfers", makeMemberMethod(&wallet_rpc_server::on_get_transfers) },
       { "get_height", makeMemberMethod(&wallet_rpc_server::on_get_height) },
-      { "reset", makeMemberMethod(&wallet_rpc_server::on_reset) }
+      { "reset", makeMemberMethod(&wallet_rpc_server::on_reset) },
+	  { "shutdown", makeMemberMethod(&wallet_rpc_server::on_shutdown) }
     };
 
     auto it = s_methods.find(jsonRequest.getMethod());
@@ -132,6 +135,11 @@ bool wallet_rpc_server::on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE:
   res.locked_amount = m_wallet.pendingBalance();
   res.available_balance = m_wallet.actualBalance();
   return true;
+}
+//------------------------------------------------------------------------------------------------------------------------------
+bool wallet_rpc_server::on_getaddress(const wallet_rpc::COMMAND_RPC_GET_ADDRESS::request& req, wallet_rpc::COMMAND_RPC_GET_ADDRESS::response& res) {
+	res.address = m_wallet.getAddress();
+	return true;
 }
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res) {
@@ -268,6 +276,7 @@ bool wallet_rpc_server::on_get_transfers(const wallet_rpc::COMMAND_RPC_GET_TRANS
     transfer.blockIndex = txInfo.blockHeight;
     transfer.unlockTime = txInfo.unlockTime;
     transfer.paymentId = "";
+	//transfer.extra = txInfo.extra;
 
     std::vector<uint8_t> extraVec;
     extraVec.reserve(txInfo.extra.size());
@@ -292,4 +301,9 @@ bool wallet_rpc_server::on_reset(const wallet_rpc::COMMAND_RPC_RESET::request& r
   return true;
 }
 
+bool wallet_rpc_server::on_shutdown(const wallet_rpc::COMMAND_RPC_SHUTDOWN::request& req, wallet_rpc::COMMAND_RPC_SHUTDOWN::response& res) {
+  send_stop_signal();
+  m_wallet.shutdown();
+  return true;
+}
 }

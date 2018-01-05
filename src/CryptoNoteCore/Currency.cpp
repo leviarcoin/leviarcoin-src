@@ -117,11 +117,19 @@ bool Currency::generateGenesisBlock() {
 }
 
 size_t Currency::blockGrantedFullRewardZoneByBlockVersion(uint8_t blockMajorVersion) const {
-  return m_blockGrantedFullRewardZone;
+  if (blockMajorVersion >= BLOCK_MAJOR_VERSION_2) {
+    return m_blockGrantedFullRewardZone;
+  } else {
+    return CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
+  }
 }
 
 uint32_t Currency::upgradeHeight(uint8_t majorVersion) const {
-  return static_cast<uint32_t>(-1);
+  if (majorVersion == BLOCK_MAJOR_VERSION_2) {
+    return m_upgradeHeightV2;
+  } else {
+    return static_cast<uint32_t>(-1);
+  }
 }
 
 bool Currency::getBlockReward(uint8_t blockMajorVersion, size_t medianSize, size_t currentBlockSize, uint64_t alreadyGeneratedCoins,
@@ -136,7 +144,8 @@ bool Currency::getBlockReward(uint8_t blockMajorVersion, size_t medianSize, size
     baseReward = (m_moneySupply - alreadyGeneratedCoins) >> m_emissionSpeedFactor;
   }
 
-  medianSize = std::max(medianSize, m_blockGrantedFullRewardZone);
+  size_t blockGrantedFullRewardZone = blockGrantedFullRewardZoneByBlockVersion(blockMajorVersion);
+  medianSize = std::max(medianSize, blockGrantedFullRewardZone);
   if (currentBlockSize > UINT64_C(2) * medianSize) {
     logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
     return false;
@@ -144,6 +153,7 @@ bool Currency::getBlockReward(uint8_t blockMajorVersion, size_t medianSize, size
 
   uint64_t penalizedBaseReward = getPenalizedAmount(baseReward, medianSize, currentBlockSize);
   uint64_t penalizedFee = getPenalizedAmount(fee, medianSize, currentBlockSize);
+  //uint64_t penalizedFee = blockMajorVersion >= BLOCK_MAJOR_VERSION_2 ? getPenalizedAmount(fee, medianSize, currentBlockSize) : fee;
 
   emissionChange = penalizedBaseReward - (fee - penalizedFee);
   reward = penalizedBaseReward + penalizedFee;
@@ -468,8 +478,10 @@ bool Currency::checkProofOfWorkV2(Crypto::cn_context& context, const CachedBlock
 
 bool Currency::checkProofOfWork(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDiffic) const {
   switch (block.getBlock().majorVersion) {
-  case BLOCK_MAJOR_VERSION_1:
-    return checkProofOfWorkV1(context, block, currentDiffic);
+    case BLOCK_MAJOR_VERSION_1:
+      return checkProofOfWorkV1(context, block, currentDiffic);
+    case BLOCK_MAJOR_VERSION_2:
+      return checkProofOfWorkV2(context, block, currentDiffic);
   }
 
   logger(ERROR, BRIGHT_RED) << "Unknown block major version: " << block.getBlock().majorVersion << "." << block.getBlock().minorVersion;
@@ -586,6 +598,8 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   fusionTxMinInputCount(parameters::FUSION_TX_MIN_INPUT_COUNT);
   fusionTxMinInOutCountRatio(parameters::FUSION_TX_MIN_IN_OUT_COUNT_RATIO);
 
+
+  upgradeHeightV2(parameters::UPGRADE_HEIGHT_V2);
   blocksFileName(parameters::CRYPTONOTE_BLOCKS_FILENAME);
   blockIndexesFileName(parameters::CRYPTONOTE_BLOCKINDEXES_FILENAME);
   txPoolFileName(parameters::CRYPTONOTE_POOLDATA_FILENAME);

@@ -441,7 +441,11 @@ uint64_t BlockchainExplorer::getFullRewardMaxBlockSize(uint8_t majorVersion) {
     throw std::system_error(make_error_code(CryptoNote::error::BlockchainExplorerErrorCodes::NOT_INITIALIZED));
   }
 
-  return parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+  if (majorVersion >= BLOCK_MAJOR_VERSION_2) {
+    return parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
+  } else {
+    return parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
+  }
 }
 
 bool BlockchainExplorer::isSynchronized() {

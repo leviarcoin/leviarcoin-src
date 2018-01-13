@@ -54,6 +54,15 @@ namespace Tools
     static const command_line::arg_descriptor<uint16_t> arg_rpc_bind_port;
     static const command_line::arg_descriptor<std::string> arg_rpc_bind_ip;
 
+	std::string get_wallet_address();
+	std::string get_balance();
+	std::string get_txs();
+	std::string transfer_wrapper(std::string address, uint64_t amount, uint64_t fee, uint64_t mixin,
+	                             uint64_t unlock_time, std::string payment_id);
+	void reset_wrapper();
+	void save_wrapper(std::string m_wallet_file_gui);
+	void parse_currency(std::string input, uint64_t &val);
+
   private:
 
     virtual void processRequest(const CryptoNote::HttpRequest& request, CryptoNote::HttpResponse& response) override;
@@ -71,7 +80,7 @@ namespace Tools
 
     bool handle_command_line(const boost::program_options::variables_map& vm);
 
-    Logging::LoggerRef logger;
+	Logging::LoggerRef logger;
     CryptoNote::IWalletLegacy& m_wallet;
     CryptoNote::INode& m_node;
     uint16_t m_port;

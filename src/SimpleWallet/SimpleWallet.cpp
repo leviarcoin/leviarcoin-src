@@ -75,6 +75,7 @@ const command_line::arg_descriptor<uint16_t> arg_daemon_port = { "daemon-port", 
 const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", INFO, true };
 const command_line::arg_descriptor<bool> arg_testnet = { "testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false };
 const command_line::arg_descriptor<bool> arg_guihelpers = { "gui-helpers", "Activate GUI helpers", false };
+const command_line::arg_descriptor<bool> arg_gui_import = { "gui-import", "", false };
 const command_line::arg_descriptor< std::vector<std::string> > arg_command = { "command", "" };
 
 
@@ -624,6 +625,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
 
     try {
       m_wallet_file = tryToOpenWalletOrLoadKeysOrThrow(logger, m_wallet, m_wallet_file_arg, pwd_container.password());
+	  m_wallet_file_gui = m_wallet_file_arg;
     } catch (const std::exception& e) {
       fail_msg_writer() << "failed to load wallet: " << e.what();
       return false;
@@ -738,22 +740,22 @@ bool simple_wallet::save(const std::vector<std::string> &args)
 }
 
 bool simple_wallet::reset(const std::vector<std::string> &args) {
-  {
-    std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
-    m_walletSynchronized = false;
-  }
+	{
+		std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+		m_walletSynchronized = false;
+	}
 
-  m_wallet->reset();
-  success_msg_writer(true) << "Reset completed successfully.";
+	m_wallet->reset();
+	success_msg_writer(true) << "Reset completed successfully.";
 
-  std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
-  while (!m_walletSynchronized) {
-    m_walletSynchronizedCV.wait(lock);
-  }
+	std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
+	while (!m_walletSynchronized) {
+		m_walletSynchronizedCV.wait(lock);
+	}
 
-  std::cout << std::endl;
+	std::cout << std::endl;
 
-  return true;
+	return true;
 }
 
 bool simple_wallet::start_mining(const std::vector<std::string>& args) {
@@ -1035,6 +1037,53 @@ bool simple_wallet::transfer(const std::vector<std::string> &args) {
   return true;
 }
 //----------------------------------------------------------------------------------------------------
+std::string simple_wallet::transferGui(const std::vector<std::string> &args) {
+	try {
+		TransferCommand cmd(m_currency);
+
+		if (!cmd.parseArguments(logger, args))
+			return "Parse error";
+		CryptoNote::WalletHelper::SendCompleteResultObserver sent;
+
+		std::string extraString;
+		std::copy(cmd.extra.begin(), cmd.extra.end(), std::back_inserter(extraString));
+
+		WalletHelper::IWalletRemoveObserverGuard removeGuard(*m_wallet, sent);
+
+		CryptoNote::TransactionId tx = m_wallet->sendTransaction(cmd.dsts, cmd.fee, extraString, cmd.fake_outs_count, 0);
+		if (tx == WALLET_LEGACY_INVALID_TRANSACTION_ID) {
+			return "Can't send money";
+		}
+
+		std::error_code sendError = sent.wait(tx);
+		removeGuard.removeObserver();
+
+		if (sendError) {
+			return sendError.message();
+		}
+
+		CryptoNote::WalletLegacyTransaction txInfo;
+		m_wallet->getTransaction(tx, txInfo);
+		
+		try {
+			CryptoNote::WalletHelper::storeWallet(*m_wallet, m_wallet_file);
+		}
+		catch (const std::exception& e) {
+			return e.what();
+		}
+		return "Money successfully sent, transaction " + Common::podToHex(txInfo.hash);
+	}
+	catch (const std::system_error& e) {
+		return e.what();
+	}
+	catch (const std::exception& e) {
+		return e.what();
+	}
+	catch (...) {
+		return "unknown error";
+	}
+}
+//----------------------------------------------------------------------------------------------------
 bool simple_wallet::run() {
   {
     std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
@@ -1071,10 +1120,18 @@ std::string simple_wallet::getWalletFile() {
 	return m_wallet_file_gui;
 }
 
+std::string simple_wallet::getWalletAddress() {
+	return m_wallet->getAddress();
+}
+
 std::string simple_wallet::getBalance() {
 	std::string balance = m_currency.formatAmount(m_wallet->actualBalance());
 	std::string locked = m_currency.formatAmount(m_wallet->pendingBalance());
 	return balance + "|" + locked;
+}
+
+size_t simple_wallet::getTxsCount() {
+	return m_wallet->getTransactionCount();
 }
 
 std::string simple_wallet::getTxs() {
@@ -1114,33 +1171,382 @@ std::string simple_wallet::getTxs() {
 	return txs;
 }
 
+std::string simple_wallet::transferWrapper(const std::vector<std::string> &args) {
+	std::error_code res;
+	// force sync true before reset
+	synchronizationCompleted(res);
+	return transferGui(args);
+}
+
+bool simple_wallet::resetWrapper() {
+	m_wallet.reset();
+	return true;
+}
+
+bool simple_wallet::saveWrapper(std::string m_walletFilename) {
+	WalletHelper::storeWallet(*m_wallet, m_walletFilename);
+	return true;
+}
+
 void wait(int seconds) {
 	boost::this_thread::sleep_for(boost::chrono::seconds{ seconds });
 }
 
+void reset_helper(std::string m_wallet_file_gui, simple_wallet &wallet) {
+	const std::string file_name_reset = m_wallet_file_gui + ".reset";
+	boost::system::error_code ignore;
+
+	while (true) {
+		try {
+			if (boost::filesystem::exists(file_name_reset, ignore)) {
+				boost::filesystem::rename(file_name_reset, file_name_reset + "_");
+				wallet.resetWrapper();
+				wait(60);
+			} else {
+				wait(5);
+			}
+		}
+		catch (...) {
+			wait(2);
+		}
+	}
+}
+
+void reset_helper_rpc(std::string m_wallet_file_gui, Tools::wallet_rpc_server &wallet) {
+	const std::string file_name_reset = m_wallet_file_gui + ".reset";
+	boost::system::error_code ignore;
+
+	while (true) {
+		try {
+			if (boost::filesystem::exists(file_name_reset, ignore)) {
+				boost::filesystem::rename(file_name_reset, file_name_reset + "_");
+				wallet.reset_wrapper();
+				wait(60);
+			} else {
+				wait(5);
+			}
+		} catch (...) {
+			wait(2);
+		}
+	}
+}
+
+void save_helper(std::string m_wallet_file_gui, simple_wallet &wallet) {
+	const std::string file_name_save = m_wallet_file_gui + ".save";
+	boost::system::error_code ignore;
+
+	while (true) {
+		try {
+			if (boost::filesystem::exists(file_name_save, ignore)) {
+				boost::filesystem::rename(file_name_save, file_name_save + "_");
+				wallet.saveWrapper(m_wallet_file_gui);
+				wait(10);
+			} else {
+				wait(5);
+			}
+		} catch (...) {
+			wait(2);
+		}
+	}
+}
+
+void save_helper_rpc(std::string m_wallet_file_gui, Tools::wallet_rpc_server &wallet) {
+	const std::string file_name_save = m_wallet_file_gui + ".save";
+	boost::system::error_code ignore;
+
+	while (true) {
+		try {
+			if (boost::filesystem::exists(file_name_save, ignore)) {
+				boost::filesystem::rename(file_name_save, file_name_save + "_");
+				wallet.save_wrapper(m_wallet_file_gui);
+				wait(10);
+			}
+			else {
+				wait(5);
+			}
+		} catch (...) {
+			wait(2);
+		}
+	}
+}
+
+void tx_helper(std::string m_wallet_file_gui, simple_wallet &wallet) {
+	boost::this_thread::interruption_enabled();
+	const std::string file_name_txcast = m_wallet_file_gui + ".txcast";
+	const std::string file_name_txresult = m_wallet_file_gui + ".txresult";
+	std::ifstream file_stream_txcast;
+	std::ofstream file_stream_txresult;
+	boost::system::error_code ignore;
+
+	while (true) {
+		try {
+			if (boost::filesystem::exists(file_name_txcast, ignore)) {
+				if (!file_stream_txcast.is_open()) file_stream_txcast.open(file_name_txcast);
+				std::string content;
+				while (!file_stream_txcast.eof()) {
+					file_stream_txcast >> content;
+				}
+
+				std::string delimiter = "|";
+				size_t pos = 0;
+				std::string token;
+				uint8_t idx = 0;
+				std::string mixin = "";
+				std::string address = "";
+				std::string amt = "";
+				std::string paymentId = "";
+				std::string fee = "";
+				std::vector<std::string> args;
+
+				while ((pos = content.find(delimiter)) != std::string::npos) {
+					token = content.substr(0, pos);
+
+					switch (idx) {
+					case 0: { // mixin
+						mixin = token;
+						args.push_back(mixin);
+						break;
+					}
+					case 1: { // address
+						address = token;
+						args.push_back(address);
+						break;
+					}
+					case 2: { // amount
+						amt = token;
+						args.push_back(amt);
+						break;
+					}
+					case 3: { // paymentId
+						paymentId = token;
+						if (paymentId != "") {
+							args.push_back("-p");
+							args.push_back(paymentId);
+						}
+						break;
+					}
+					case 4: { // fee
+						fee = token;
+						if (fee != "") {
+							args.push_back("-f");
+							args.push_back(fee);
+						}
+						break;
+					}
+					default: {
+						break;
+					}
+					}
+
+					idx++;
+					content.erase(0, pos + delimiter.length());
+				}
+				// close file
+				file_stream_txcast.close();
+				// delete request
+				uint8_t retry = 3;
+				bool statusRemove = boost::filesystem::remove(file_name_txcast);
+				while (retry > 0 && !statusRemove) {
+					retry--;
+					statusRemove = boost::filesystem::remove(file_name_txcast);
+					wait(1);
+				}
+				// send tx
+				std::string result = wallet.transferWrapper(args);
+				// write result
+				if (!file_stream_txresult.is_open()) file_stream_txresult.open(file_name_txresult);
+				file_stream_txresult << result;
+				file_stream_txresult.close();
+			}
+		} catch (...) {
+			wait(1);
+			continue;
+		}
+		
+		boost::this_thread::interruption_point();
+		wait(2);
+	}
+}
+
+void tx_helper_rpc(std::string m_wallet_file_gui, Tools::wallet_rpc_server &wallet) {
+	boost::this_thread::interruption_enabled();
+	const std::string file_name_txcast = m_wallet_file_gui + ".txcast";
+	const std::string file_name_txresult = m_wallet_file_gui + ".txresult";
+	std::ifstream file_stream_txcast;
+	std::ofstream file_stream_txresult;
+	boost::system::error_code ignore;
+
+	while (true) {
+		try {
+			if (boost::filesystem::exists(file_name_txcast, ignore)) {
+				if (!file_stream_txcast.is_open()) file_stream_txcast.open(file_name_txcast);
+				std::string content;
+				while (!file_stream_txcast.eof()) {
+					file_stream_txcast >> content;
+				}
+
+				std::string delimiter = "|";
+				size_t pos = 0;
+				uint8_t idx = 0;
+				std::string token;
+				std::string address = "";
+				std::string paymentId = "";
+				uint64_t mixin = 1;
+				uint64_t amt = 0;
+				uint64_t fee = 1000000;
+
+				while ((pos = content.find(delimiter)) != std::string::npos) {
+					token = content.substr(0, pos);
+
+					switch (idx) {
+					case 0: { // mixin
+						mixin = std::stoull(token.c_str());
+						break;
+					}
+					case 1: { // address
+						address = token;
+						break;
+					}
+					case 2: { // amount
+						amt = 0;
+						wallet.parse_currency(token, amt);
+						break;
+					}
+					case 3: { // paymentId
+						paymentId = token;
+						break;
+					}
+					case 4: { // fee
+						wallet.parse_currency(token, fee);
+						break;
+					}
+					default: {
+						break;
+					}
+					}
+
+					idx++;
+					content.erase(0, pos + delimiter.length());
+				}
+				// close file
+				file_stream_txcast.close();
+				// delete request
+				uint8_t retry = 3;
+				bool statusRemove = boost::filesystem::remove(file_name_txcast);
+				while (retry > 0 && !statusRemove) {
+					retry--;
+					statusRemove = boost::filesystem::remove(file_name_txcast);
+					wait(1);
+				}
+				// send tx
+				std::string result = wallet.transfer_wrapper(address, amt, fee, mixin, 0, paymentId);
+				// write result
+				if (!file_stream_txresult.is_open()) file_stream_txresult.open(file_name_txresult);
+				file_stream_txresult << result;
+				file_stream_txresult.close();
+			}
+		} catch (...) {
+			wait(1);
+			continue;
+		}
+		
+		boost::this_thread::interruption_point();
+		wait(2);
+	}
+}
+
 void gui_helper(std::string m_wallet_file_gui, simple_wallet &wallet) {
+	boost::this_thread::interruption_enabled();
+	m_wallet_file_gui = wallet.getWalletFile();
+	const std::string file_name_status = m_wallet_file_gui + ".status";
+	const std::string file_name_txs = m_wallet_file_gui + ".txs";
+	const std::string file_name_address = m_wallet_file_gui + ".address";
+	std::ofstream file_stream_status;
+	std::ofstream file_stream_txs;
+	std::ofstream file_stream_address;
+	size_t lastTxsCount = 0;
+	std::string lastTxs = "";
+	std::string lastBalance = "";
+	boost::system::error_code ignore;
+
+	if (!boost::filesystem::exists(file_name_address, ignore)) {
+		writeAddressFile(file_name_address, wallet.getWalletAddress());
+	}
+
+	while (true) {
+		try {
+			// get data
+			std::string balance = wallet.getBalance();
+			if (balance == lastBalance) continue;
+			lastBalance = balance;
+
+			// write on files
+			if (!file_stream_status.is_open()) file_stream_status.open(file_name_status);
+			file_stream_status << balance;
+			file_stream_status.close();
+
+			//if (wallet.getTxsCount() <= lastTxsCount) return;
+			std::string txs = wallet.getTxs();
+			if (txs == lastTxs) continue;
+			lastTxs = txs;
+
+			if (!file_stream_txs.is_open()) file_stream_txs.open(file_name_txs);
+			file_stream_txs << txs;
+			file_stream_txs.close();
+		} catch (...) {
+			wait(2);
+			continue;
+		}
+
+		boost::this_thread::interruption_point();
+		wait(5);
+	}
+}
+
+void gui_helper_rpc(std::string m_wallet_file_gui, Tools::wallet_rpc_server &wallet) {
 	boost::this_thread::interruption_enabled();
 	const std::string file_name_status = m_wallet_file_gui + ".status";
 	const std::string file_name_txs = m_wallet_file_gui + ".txs";
+	const std::string file_name_address = m_wallet_file_gui + ".address";
 	std::ofstream file_stream_status;
 	std::ofstream file_stream_txs;
+	std::ofstream file_stream_address;
+	size_t lastTxsCount = 0;
+	std::string lastTxs = "";
+	std::string lastBalance = "";
+	boost::system::error_code ignore;
+
+	if (!boost::filesystem::exists(file_name_address, ignore)) {
+		writeAddressFile(file_name_address, wallet.get_wallet_address());
+	}
 
 	while (true) {
-		// get data
-		std::string balance = wallet.getBalance();
-		std::string txs = wallet.getTxs();
+		try {
+			// get data
+			std::string balance = wallet.get_balance();
+			if (balance == lastBalance) continue;
+			lastBalance = balance;
 
-		// write on files
-		if (!file_stream_status.is_open()) file_stream_status.open(file_name_status);
-		file_stream_status << balance;
-		file_stream_status.close();
+			// write on files
+			if (!file_stream_status.is_open()) file_stream_status.open(file_name_status);
+			file_stream_status << balance;
+			file_stream_status.close();
 
-		if (!file_stream_txs.is_open()) file_stream_txs.open(file_name_txs);
-		file_stream_txs << txs;
-		file_stream_txs.close();
+			//if (wallet.getTxsCount() <= lastTxsCount) return;
+			std::string txs = wallet.get_txs();
+			if (txs == lastTxs) continue;
+			lastTxs = txs;
+
+			if (!file_stream_txs.is_open()) file_stream_txs.open(file_name_txs);
+			file_stream_txs << txs;
+			file_stream_txs.close();
+		} catch (...) {
+			wait(2);
+			continue;
+		}
 
 		boost::this_thread::interruption_point();
-		wait(2);
+		wait(5);
 	}
 }
 
@@ -1164,6 +1570,7 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_log_level);
   command_line::add_arg(desc_params, arg_testnet);
   command_line::add_arg(desc_params, arg_guihelpers);
+  command_line::add_arg(desc_params, arg_gui_import);
   Tools::wallet_rpc_server::init_options(desc_params);
 
   po::positional_options_description positional_options;
@@ -1284,6 +1691,37 @@ int main(int argc, char* argv[]) {
       return 1;
     }
 
+	bool gui_helpers = command_line::get_arg(vm, arg_guihelpers);
+	bool gui_import = command_line::get_arg(vm, arg_gui_import);
+	boost::thread t;
+	boost::thread tx;
+	boost::thread res;
+	boost::thread save;
+	if (gui_helpers) {
+		try {
+			// Start threads
+			boost::thread t(boost::bind(&gui_helper_rpc, wallet_file, boost::ref(wrpc)));
+			t.detach();
+
+			boost::thread tx(boost::bind(&tx_helper_rpc, wallet_file, boost::ref(wrpc)));
+			tx.detach();
+
+			boost::thread res(boost::bind(&reset_helper_rpc, wallet_file, boost::ref(wrpc)));
+			res.detach();
+
+			boost::thread save(boost::bind(&save_helper_rpc, wallet_file, boost::ref(wrpc)));
+			res.detach();
+
+			logger(INFO) << "GUI helper started: " << wallet_file;
+
+			if (gui_import) wrpc.reset_wrapper();
+		}
+		catch (const std::exception& e) {
+			logger(ERROR, BRIGHT_RED) << "failed to start GUI helper: " << e.what();
+			return 1;
+		}
+	}
+
     Tools::SignalHandler::install([&wrpc, &wallet] {
       wrpc.send_stop_signal();
     });
@@ -1296,6 +1734,21 @@ int main(int argc, char* argv[]) {
       logger(INFO) << "Storing wallet...";
       CryptoNote::WalletHelper::storeWallet(*wallet, walletFileName);
       logger(INFO, BRIGHT_GREEN) << "Stored ok";
+
+	  if (gui_helpers) {
+		  try {
+			  // Stop thread
+			  t.interrupt();
+			  tx.interrupt();
+			  res.interrupt();
+			  save.interrupt();
+			  logger(INFO) << "GUI helper stopped.";
+		  }
+		  catch (const std::exception& e) {
+			  logger(ERROR, BRIGHT_RED) << "failed to stop GUI helper: " << e.what();
+			  return 1;
+		  }
+	  }
     } catch (const std::exception& e) {
       logger(ERROR, BRIGHT_RED) << "Failed to store wallet: " << e.what();
       return 1;
@@ -1310,18 +1763,33 @@ int main(int argc, char* argv[]) {
     }
 
 	bool gui_helpers = command_line::get_arg(vm, arg_guihelpers);
+	bool gui_import = command_line::get_arg(vm, arg_gui_import);
 	boost::thread t;
+	boost::thread tx;
+	boost::thread res;
+	boost::thread save;
 	if (gui_helpers) {
 		std::string wallet_file = wal.getWalletFile();
 		try {
-			// Start thread
-			//boost::thread t(&gui_helper);
+			// Start threads
 			boost::thread t(boost::bind(&gui_helper, wallet_file, boost::ref(wal)));
 			t.detach();
+
+			boost::thread tx(boost::bind(&tx_helper, wallet_file, boost::ref(wal)));
+			tx.detach();
+
+			boost::thread res(boost::bind(&reset_helper, wallet_file, boost::ref(wal)));
+			res.detach();
+
+			boost::thread save(boost::bind(&save_helper, wallet_file, boost::ref(wal)));
+			save.detach();
+
 			logger(INFO) << "GUI helper started: " << wallet_file;
+
+			if (gui_import) wal.resetWrapper();
 		}
 		catch (const std::exception& e) {
-			logger(ERROR, BRIGHT_RED) << "failed start GUI helper: " << e.what();
+			logger(ERROR, BRIGHT_RED) << "failed to start GUI helper: " << e.what();
 			return 1;
 		}
 	}
@@ -1343,6 +1811,9 @@ int main(int argc, char* argv[]) {
 			try {
 				// Stop thread
 				t.interrupt();
+				tx.interrupt();
+				res.interrupt();
+				save.interrupt();
 				logger(INFO) << "GUI helper stopped.";
 			}
 			catch (const std::exception& e) {

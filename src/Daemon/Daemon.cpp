@@ -105,7 +105,8 @@ COMMAND_RPC_GET_INFO::response get_daemon_info(Core &m_core, NodeServer &m_p2p, 
 	COMMAND_RPC_GET_INFO::response res;
 	res.height = m_core.getTopBlockIndex() + 1;
 	res.outgoing_connections_count = m_p2p.get_outgoing_connections_count();
-	res.incoming_connections_count = m_p2p.get_connections_count() - res.outgoing_connections_count;
+	//res.incoming_connections_count = m_p2p.get_connections_count() - res.outgoing_connections_count;
+	res.incoming_connections_count = m_p2p.get_connections_count();
 	res.last_known_block_index = std::max(static_cast<uint32_t>(1), m_protocol.getObservedHeight()) - 1;
 	return res;
 }
@@ -113,18 +114,22 @@ COMMAND_RPC_GET_INFO::response get_daemon_info(Core &m_core, NodeServer &m_p2p, 
 void gui_helper(std::string datadir, Core &m_core, NodeServer &m_p2p, CryptoNoteProtocolHandler &m_protocol) {
 	boost::this_thread::interruption_enabled();
 	// Write file
-	const std::string file_name = datadir + "STATUS";
+	const std::string file_name = datadir + "/STATUS";
 	std::ofstream file_stream;
 	while (true) {
-		if (!file_stream.is_open()) file_stream.open(file_name);
-		CryptoNote::COMMAND_RPC_GET_INFO::response getInfoResp = AUTO_VAL_INIT(getInfoResp);
-		COMMAND_RPC_GET_INFO::response res = get_daemon_info(m_core, m_p2p, m_protocol);
+		try {
+			if (!file_stream.is_open()) file_stream.open(file_name);
+			CryptoNote::COMMAND_RPC_GET_INFO::response getInfoResp = AUTO_VAL_INIT(getInfoResp);
+			COMMAND_RPC_GET_INFO::response res = get_daemon_info(m_core, m_p2p, m_protocol);
 
-		file_stream << res.last_known_block_index << "|" << res.height << "|" << res.incoming_connections_count;
-		file_stream.close();
-
+			file_stream << res.last_known_block_index << "|" << res.height << "|" << res.incoming_connections_count;
+			file_stream.close();
+		} catch (...) {
+			wait(3);
+			continue;
+		}
 		boost::this_thread::interruption_point();
-		wait(1);
+		wait(5);
 	}
 }
 

@@ -60,6 +60,12 @@ wallet_rpc_server::wallet_rpc_server(
   m_currency(currency),
   m_walletFilename(walletFile) {
 }
+const size_t TIMESTAMP_MAX_WIDTH = 19;
+const size_t HASH_MAX_WIDTH = 64;
+const size_t TOTAL_AMOUNT_MAX_WIDTH = 20;
+const size_t FEE_MAX_WIDTH = 14;
+const size_t BLOCK_MAX_WIDTH = 7;
+const size_t UNLOCK_TIME_MAX_WIDTH = 11;
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::run() {
   start(m_bind_ip, m_port);
@@ -77,10 +83,93 @@ void wallet_rpc_server::send_stop_signal() {
 
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::handle_command_line(const boost::program_options::variables_map& vm) {
-  m_bind_ip = command_line::get_arg(vm, arg_rpc_bind_ip);
-  m_port = command_line::get_arg(vm, arg_rpc_bind_port);
-  return true;
+	m_bind_ip = command_line::get_arg(vm, arg_rpc_bind_ip);
+	m_port = command_line::get_arg(vm, arg_rpc_bind_port);
+	return true;
 }
+//------------------------------------------------------------------------------------------------------------------------------
+std::string wallet_rpc_server::get_wallet_address() {
+	return m_wallet.getAddress();
+}
+//------------------------------------------------------------------------------------------------------------------------------
+std::string wallet_rpc_server::get_balance() {
+	std::string balance = m_currency.formatAmount(m_wallet.actualBalance());
+	std::string locked = m_currency.formatAmount(m_wallet.pendingBalance());
+	return balance + "|" + locked;
+}
+//------------------------------------------------------------------------------------------------------------------------------
+std::string wallet_rpc_server::get_txs() {
+	std::string txs = "";
+
+	size_t transactionsCount = m_wallet.getTransactionCount();
+	for (size_t trantransactionNumber = 0; trantransactionNumber < transactionsCount; ++trantransactionNumber) {
+		WalletLegacyTransaction txInfo;
+		m_wallet.getTransaction(trantransactionNumber, txInfo);
+		if (txInfo.state != WalletLegacyTransactionState::Active || txInfo.blockHeight == WALLET_LEGACY_UNCONFIRMED_TRANSACTION_HEIGHT) {
+			continue;
+		}
+
+		std::vector<uint8_t> extraVec = Common::asBinaryArray(txInfo.extra);
+
+		Crypto::Hash paymentId;
+		std::string paymentIdStr = (getPaymentIdFromTxExtra(extraVec, paymentId) && paymentId != NULL_HASH ? Common::podToHex(paymentId) : "");
+
+		char timeString[TIMESTAMP_MAX_WIDTH + 1];
+		time_t timestamp = static_cast<time_t>(txInfo.timestamp);
+		if (std::strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", std::gmtime(&timestamp)) == 0) {
+			throw std::runtime_error("time buffer is too small");
+		}
+
+		txs += std::string(timeString)
+			+ "|" + Common::podToHex(txInfo.hash)
+			+ "|" + m_currency.formatAmount(txInfo.totalAmount)
+			+ "|" + m_currency.formatAmount(txInfo.fee)
+			+ "|" + std::string(std::to_string(txInfo.blockHeight))
+			+ "|" + std::string(std::to_string(txInfo.unlockTime));
+
+		if (!paymentIdStr.empty()) {
+			txs += "|" + paymentIdStr;
+		}
+		txs += "\n";
+	}
+	return txs;
+}
+//------------------------------------------------------------------------------------------------------------------------------
+void wallet_rpc_server::parse_currency(std::string input, uint64_t &val) {
+	m_currency.parseAmount(input, val);
+}
+//------------------------------------------------------------------------------------------------------------------------------
+void wallet_rpc_server::reset_wrapper() {
+	m_wallet.reset();
+}
+//------------------------------------------------------------------------------------------------------------------------------
+void wallet_rpc_server::save_wrapper(std::string m_wallet_file_gui) {
+	WalletHelper::storeWallet(m_wallet, m_walletFilename);
+}
+//------------------------------------------------------------------------------------------------------------------------------
+std::string wallet_rpc_server::transfer_wrapper(std::string address, uint64_t amount, uint64_t fee, uint64_t mixin, uint64_t unlock_time, std::string payment_id) {
+	wallet_rpc::COMMAND_RPC_TRANSFER::request req;
+	wallet_rpc::COMMAND_RPC_TRANSFER::response res;
+	std::list<wallet_rpc::transfer_destination> destinations;
+	wallet_rpc::transfer_destination destination;
+	destination.address = address;
+	destination.amount = amount;
+	destinations.insert(destinations.begin(), destination);
+
+	req.destinations = destinations;
+	req.fee = fee;
+	req.mixin = mixin;
+	req.unlock_time = unlock_time;
+	req.payment_id = payment_id;
+	try {
+		on_transfer(req, res);
+		return res.tx_hash;
+	} catch (JsonRpc::JsonRpcError error) {
+		return error.message;
+	}
+	return "Unexpected error";
+}
+
 //------------------------------------------------------------------------------------------------------------------------------
 bool wallet_rpc_server::init(const boost::program_options::variables_map& vm) {
   if (!handle_command_line(vm)) {

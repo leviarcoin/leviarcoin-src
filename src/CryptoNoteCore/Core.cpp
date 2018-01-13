@@ -157,7 +157,7 @@ int64_t getEmissionChange(const Currency& currency, IBlockchainCache& segment, u
   auto alreadyGeneratedCoins = segment.getAlreadyGeneratedCoins(previousBlockIndex);
   auto lastBlocksSizes = segment.getLastBlocksSizes(currency.rewardBlocksWindow(), previousBlockIndex, addGenesisBlock);
   auto blocksSizeMedian = Common::medianValue(lastBlocksSizes);
-  if (!currency.getBlockReward(cachedBlock.getBlock().majorVersion, blocksSizeMedian,
+  if (!currency.getBlockReward(previousBlockIndex + 1, blocksSizeMedian,
                                cumulativeSize, alreadyGeneratedCoins, cumulativeFee, reward, emissionChange)) {
     throw std::system_error(make_error_code(error::BlockValidationError::CUMULATIVE_BLOCK_SIZE_TOO_BIG));
   }
@@ -195,8 +195,6 @@ Core::Core(const Currency& currency, Logging::ILogger& logger, Checkpoints&& che
     : currency(currency), dispatcher(dispatcher), contextGroup(dispatcher), logger(logger, "Core"), checkpoints(std::move(checkpoints)),
       upgradeManager(new UpgradeManager()), blockchainCacheFactory(std::move(blockchainCacheFactory)),
       mainChainStorage(std::move(mainchainStorage)), initialized(false) {
-        
-  upgradeManager->addMajorBlockVersion(BLOCK_MAJOR_VERSION_2, currency.upgradeHeight(BLOCK_MAJOR_VERSION_2));
 
   transactionPool = std::unique_ptr<ITransactionPoolCleanWrapper>(new TransactionPoolCleanWrapper(
     std::unique_ptr<ITransactionPool>(new TransactionPool(logger)),
@@ -593,7 +591,7 @@ std::error_code Core::addBlock(const CachedBlock& cachedBlock, RawBlock&& rawBlo
   auto lastBlocksSizes = cache->getLastBlocksSizes(currency.rewardBlocksWindow(), previousBlockIndex, addGenesisBlock);
   auto blocksSizeMedian = Common::medianValue(lastBlocksSizes);
 
-  if (!currency.getBlockReward(cachedBlock.getBlock().majorVersion, blocksSizeMedian,
+  if (!currency.getBlockReward(previousBlockIndex + 1, blocksSizeMedian,
                                cumulativeBlockSize, alreadyGeneratedCoins, cumulativeFee, reward, emissionChange)) {
 
 
@@ -1008,28 +1006,8 @@ bool Core::getBlockTemplate(BlockTemplate& b, const AccountPublicAddress& adr, c
   }
 
   b = boost::value_initialized<BlockTemplate>();
-  //b.majorVersion = BLOCK_MAJOR_VERSION_1;
-  //b.minorVersion = BLOCK_MINOR_VERSION_0;
-
   b.majorVersion = getBlockMajorVersionForHeight(height);
   b.minorVersion = BLOCK_MINOR_VERSION_0;
-
-  if (b.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-    //b.parentBlock.majorVersion = getBlockMajorVersionForHeight(height - 1);
-
-    TransactionExtraMergeMiningTag mmTag = boost::value_initialized<decltype(mmTag)>();
-    if (!appendMergeMiningTagToExtra(b.parentBlock.baseTransaction.extra, mmTag)) {
-      logger(Logging::ERROR, Logging::BRIGHT_RED)
-          << "Failed to append merge mining tag to extra of the parent block miner transaction";
-      return false;
-    }
-
-    b.parentBlock.majorVersion = BLOCK_MAJOR_VERSION_1;
-    b.parentBlock.minorVersion = BLOCK_MINOR_VERSION_0;
-    b.parentBlock.transactionCount = 1;
-  }
-
-
   b.previousBlockHash = getTopBlockHash();
   b.timestamp = time(nullptr);
 
@@ -1349,19 +1327,6 @@ std::error_code Core::validateBlock(const CachedBlock& cachedBlock, IBlockchainC
 
   if (upgradeManager->getBlockMajorVersion(cachedBlock.getBlockIndex()) != block.majorVersion) {
     return error::BlockValidationError::WRONG_VERSION;
-  }
-
-  if (block.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-    if (block.majorVersion == BLOCK_MAJOR_VERSION_2 && block.parentBlock.majorVersion > BLOCK_MAJOR_VERSION_1) {
-      logger(Logging::ERROR, Logging::BRIGHT_RED) << "Parent block of block " << cachedBlock.getBlockHash() << " has wrong major version: "
-                                << static_cast<int>(block.parentBlock.majorVersion) << ", at index " << cachedBlock.getBlockIndex()
-                                << " expected version is " << static_cast<int>(BLOCK_MAJOR_VERSION_1);
-      return error::BlockValidationError::PARENT_BLOCK_WRONG_VERSION;
-    }
-
-    if (cachedBlock.getParentBlockBinaryArray(false).size() > 2048) {
-      return error::BlockValidationError::PARENT_BLOCK_SIZE_TOO_BIG;
-    }
   }
 
   if (block.timestamp > getAdjustedTime() + currency.blockFutureTimeLimit()) {
@@ -1743,7 +1708,7 @@ uint8_t Core::getBlockMajorVersionForHeight(uint32_t height) const {
 
 size_t Core::calculateCumulativeBlocksizeLimit(uint32_t height) const {
   uint8_t nextBlockMajorVersion = getBlockMajorVersionForHeight(height);
-  size_t nextBlockGrantedFullRewardZone = currency.blockGrantedFullRewardZoneByBlockVersion(nextBlockMajorVersion);
+  size_t nextBlockGrantedFullRewardZone = currency.blockGrantedFullRewardZoneByHeight(height);
 
   assert(!chainsStorage.empty());
   assert(!chainsLeaves.empty());
@@ -1946,11 +1911,11 @@ BlockDetails Core::getBlockDetails(const Crypto::Hash& blockHash) const {
   }
 
   int64_t emissionChange = 0;
-  bool result = currency.getBlockReward(blockDetails.majorVersion, blockDetails.sizeMedian, 0, prevBlockGeneratedCoins, 0, blockDetails.baseReward, emissionChange);
+  bool result = currency.getBlockReward(blockIndex, blockDetails.sizeMedian, 0, prevBlockGeneratedCoins, 0, blockDetails.baseReward, emissionChange);
   assert(result);
 
   uint64_t currentReward = 0;
-  result = currency.getBlockReward(blockDetails.majorVersion, blockDetails.sizeMedian, blockDetails.transactionsCumulativeSize,
+  result = currency.getBlockReward(blockIndex, blockDetails.sizeMedian, blockDetails.transactionsCumulativeSize,
                                    prevBlockGeneratedCoins, 0, currentReward, emissionChange);
   assert(result);
 
@@ -2231,7 +2196,7 @@ void Core::transactionPoolCleaningProcedure() {
 void Core::updateBlockMedianSize() {
   auto mainChain = chainsLeaves[0];
 
-  size_t nextBlockGrantedFullRewardZone = currency.blockGrantedFullRewardZoneByBlockVersion(upgradeManager->getBlockMajorVersion(mainChain->getTopBlockIndex() + 1));
+  size_t nextBlockGrantedFullRewardZone = currency.blockGrantedFullRewardZoneByHeight(mainChain->getTopBlockIndex() + 1);
 
   auto lastBlockSizes = mainChain->getLastBlocksSizes(currency.rewardBlocksWindow());
 

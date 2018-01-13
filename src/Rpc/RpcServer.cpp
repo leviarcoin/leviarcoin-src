@@ -563,7 +563,7 @@ bool RpcServer::on_getblockdata(const COMMAND_RPC_GET_BLOCK_DETAILS::request& re
     uint64_t maxReward = 0;
     uint64_t currentReward = 0;
     int64_t emissionChange = 0;
-    size_t blockGrantedFullRewardZone = m_core.getCurrency().blockGrantedFullRewardZoneByBlockVersion(block_header.major_version);
+    size_t blockGrantedFullRewardZone = m_core.getCurrency().blockGrantedFullRewardZoneByHeight(res.block.height);
     res.block.effectiveSizeMedian = std::max(res.block.sizeMedian, blockGrantedFullRewardZone);
     
     res.block.baseReward = blkDetails.baseReward;

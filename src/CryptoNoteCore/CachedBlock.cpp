@@ -46,11 +46,6 @@ const Crypto::Hash& CachedBlock::getTransactionTreeHash() const {
 const Crypto::Hash& CachedBlock::getBlockHash() const {
   if (!blockHash.is_initialized()) {
     BinaryArray blockBinaryArray = getBlockHashingBinaryArray();
-    if (BLOCK_MAJOR_VERSION_2 <= block.majorVersion) {
-      const auto& parentBlock = getParentBlockHashingBinaryArray(false);
-      blockBinaryArray.insert(blockBinaryArray.end(), parentBlock.begin(), parentBlock.end());
-    }
-
     blockHash = getObjectHash(blockBinaryArray);
   }
 
@@ -61,10 +56,6 @@ const Crypto::Hash& CachedBlock::getBlockLongHash(cn_context& cryptoContext) con
   if (!blockLongHash.is_initialized()) {
     if (block.majorVersion == BLOCK_MAJOR_VERSION_1) {
       const auto& rawHashingBlock = getBlockHashingBinaryArray();
-      blockLongHash = Hash();
-      cn_slow_hash(cryptoContext, rawHashingBlock.data(), rawHashingBlock.size(), blockLongHash.get());
-    } else if (block.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-      const auto& rawHashingBlock = getParentBlockHashingBinaryArray(true);
       blockLongHash = Hash();
       cn_slow_hash(cryptoContext, rawHashingBlock.data(), rawHashingBlock.size(), blockLongHash.get());
     } else {

@@ -380,12 +380,6 @@ void serialize(BlockHeader& header, ISerializer& serializer) {
 
 void serialize(BlockTemplate& block, ISerializer& serializer) {
   serializeBlockHeader(block, serializer);
-
-  if (block.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-    auto parentBlockSerializer = makeParentBlockSerializer(block, false, false);
-    serializer(parentBlockSerializer, "parent_block");
-  }
-  
   serializer(block.baseTransaction, "miner_tx");
   serializer(block.transactionHashes, "tx_hashes");
 }

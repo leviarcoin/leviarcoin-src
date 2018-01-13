@@ -263,11 +263,26 @@ bool test_generator::constructMaxSizeBlock(CryptoNote::BlockTemplate& blk, const
                                            const std::list<CryptoNote::Transaction>& txList/* = std::list<CryptoNote::Transaction>()*/) {
   std::vector<size_t> blockSizes;
   medianBlockCount = medianBlockCount == 0 ? m_currency.rewardBlocksWindow() : medianBlockCount;
+  CachedBlock cachedBlock(blk);
   CachedBlock cachedPrevBlock(blkPrev);
   getLastNBlockSizes(blockSizes, cachedPrevBlock.getBlockHash(), medianBlockCount);
 
   size_t median = Common::medianValue(blockSizes);
-  size_t blockGrantedFullRewardZone = m_currency.blockGrantedFullRewardZoneByBlockVersion(defaultMajorVersion);
+  // static test
+  size_t blockGrantedFullRewardZone = m_currency.blockGrantedFullRewardZoneByHeight(1);
+  size_t blockGrantedFullRewardZoneCheck = 20000;
+  if (blockGrantedFullRewardZone != blockGrantedFullRewardZoneCheck) {
+    std::cerr << "Error in check blockGrantedFullRewardZone" << std::endl;
+    return false;
+  }
+  
+  blockGrantedFullRewardZone = m_currency.blockGrantedFullRewardZoneByHeight(250001);
+  blockGrantedFullRewardZoneCheck = 200000;
+  if (blockGrantedFullRewardZone != blockGrantedFullRewardZoneCheck) {
+    std::cerr << "Error in check blockGrantedFullRewardZone" << std::endl;
+    return false;
+  }
+  
   median = std::max(median, blockGrantedFullRewardZone);
 
   uint64_t totalFee = 0;

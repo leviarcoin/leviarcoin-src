@@ -69,24 +69,7 @@ namespace CryptoNote
   //-----------------------------------------------------------------------------------------------------
   bool miner::set_block_template(const BlockTemplate& bl, const Difficulty& di) {
     std::lock_guard<decltype(m_template_lock)> lk(m_template_lock);
-
     m_template = bl;
-
-    if (m_template.majorVersion >= BLOCK_MAJOR_VERSION_2) {
-      CachedBlock cachedBlk(m_template);
-      CryptoNote::TransactionExtraMergeMiningTag mmTag;
-      mmTag.depth = 0;
-      try {
-        m_template.parentBlock.baseTransaction.extra.clear();
-        mmTag.merkleRoot = cachedBlk.getAuxiliaryBlockHeaderHash();
-        if (!CryptoNote::appendMergeMiningTagToExtra(m_template.parentBlock.baseTransaction.extra, mmTag)) {
-          return false;
-        }
-      } catch (std::exception&) {
-        return false;
-      }
-    }
-
     m_diffic = di;
     ++m_template_no;
     m_starter_nonce = Crypto::rand<uint32_t>();

@@ -427,7 +427,7 @@ std::error_code InProcessNode::doGetRandomOutsByAmounts(
   } catch (std::system_error& e) {
     return e.code();
   } catch (std::exception&) {
-    return make_error_code(CryptoNote::error::INTERNAL_NODE_ERROR);
+    return make_error_code(CryptoNote::error::GET_RANDOM_OUTPUTS_ERROR);
   }
 
   return std::error_code();

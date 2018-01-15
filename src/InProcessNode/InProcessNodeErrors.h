@@ -29,7 +29,8 @@ enum InProcessNodeErrorCodes {
   NETWORK_ERROR,
   NODE_BUSY,
   INTERNAL_NODE_ERROR,
-  REQUEST_ERROR
+  REQUEST_ERROR,
+  GET_RANDOM_OUTPUTS_ERROR
 };
 
 class InProcessNodeErrorCategory : public std::error_category {
@@ -46,13 +47,14 @@ public:
 
   virtual std::string message(int ev) const override {
     switch (ev) {
-      case NOT_INITIALIZED:     return "Object was not initialized";
-      case ALREADY_INITIALIZED: return "Object has been already initialized";
-      case NETWORK_ERROR:       return "Network error";
-      case NODE_BUSY:           return "Node is busy";
-      case INTERNAL_NODE_ERROR: return "Internal node error";
-      case REQUEST_ERROR:       return "Error in request parameters";
-      default:                  return "Unknown error";
+      case NOT_INITIALIZED:				return "Object was not initialized";
+      case ALREADY_INITIALIZED:			return "Object has been already initialized";
+      case NETWORK_ERROR:				return "Network error";
+      case NODE_BUSY:					return "Node is busy";
+      case INTERNAL_NODE_ERROR:			return "Internal node error";
+      case REQUEST_ERROR:				return "Error in request parameters";
+	  case GET_RANDOM_OUTPUTS_ERROR:	return "Error in get random outputs";
+      default:							return "Unknown error";
     }
   }
 

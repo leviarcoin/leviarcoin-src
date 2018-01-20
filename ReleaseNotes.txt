@@ -1,3 +1,10 @@
+Release notes 2.1.2-r3
+- miniwallet release for LeviarCoin GUI wallet 0.2.0
+
+Release notes 2.1.2-r2
+- GUI helpers updates
+- Hard Fork fix
+
 Release notes 2.1.2
 - Increased block size Hard Fork set at block 250000
 - Updated crawler public key

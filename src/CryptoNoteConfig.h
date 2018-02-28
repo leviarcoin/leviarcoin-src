@@ -41,8 +41,9 @@ const uint64_t GENESIS_BLOCK_REWARD                          = UINT64_C(81000000
 static_assert(EMISSION_SPEED_FACTOR <= 8 * sizeof(uint64_t), "Bad EMISSION_SPEED_FACTOR");
 
 const size_t   CRYPTONOTE_REWARD_BLOCKS_WINDOW               = 100;
-const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE     = 200000; //size of block (bytes) after which reward for block calculated using block size
+const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE     = 1000000; //size of block (bytes) after which reward for block calculated using block size
 const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1  = 20000;
+const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2  = 200000;
 const size_t   CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_CURRENT = CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
 
 const size_t   CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE        = 600;
@@ -74,8 +75,10 @@ const size_t   FUSION_TX_MIN_IN_OUT_COUNT_RATIO              = 4;
 
 // Image check start
 const uint32_t KEY_IMAGE_CHECKING_BLOCK_INDEX                = 24000;
+
 // Hard fork block size
-const uint32_t UPGRADE_HEIGHT_V2                             = 250000;
+const uint32_t UPGRADE_HEIGHT_V1                             = 250000;
+const uint32_t UPGRADE_HEIGHT_V2                             = 325000;
 
 const char     CRYPTONOTE_BLOCKS_FILENAME[]                  = "blocks.bin";
 const char     CRYPTONOTE_BLOCKINDEXES_FILENAME[]            = "blockindexes.bin";

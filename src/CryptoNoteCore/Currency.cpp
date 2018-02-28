@@ -119,6 +119,8 @@ bool Currency::generateGenesisBlock() {
 size_t Currency::blockGrantedFullRewardZoneByHeight(uint32_t height) const {
   if (height >= parameters::UPGRADE_HEIGHT_V2) {
     return m_blockGrantedFullRewardZone;
+  } else if (height >= parameters::UPGRADE_HEIGHT_V1) {
+    return CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2;
   } else {
     return CryptoNote::parameters::CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
   }
@@ -592,7 +594,7 @@ CurrencyBuilder::CurrencyBuilder(Logging::ILogger& log) : m_currency(log) {
   fusionTxMinInputCount(parameters::FUSION_TX_MIN_INPUT_COUNT);
   fusionTxMinInOutCountRatio(parameters::FUSION_TX_MIN_IN_OUT_COUNT_RATIO);
 
-
+  upgradeHeightV1(parameters::UPGRADE_HEIGHT_V1);
   upgradeHeightV2(parameters::UPGRADE_HEIGHT_V2);
   blocksFileName(parameters::CRYPTONOTE_BLOCKS_FILENAME);
   blockIndexesFileName(parameters::CRYPTONOTE_BLOCKINDEXES_FILENAME);

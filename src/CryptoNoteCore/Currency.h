@@ -178,6 +178,7 @@ private:
   size_t m_fusionTxMinInputCount;
   size_t m_fusionTxMinInOutCountRatio;
 
+  uint32_t m_upgradeHeightV1;
   uint32_t m_upgradeHeightV2;
   uint32_t m_upgradeHeightV3;
   unsigned int m_upgradeVotingThreshold;
@@ -253,6 +254,7 @@ public:
   CurrencyBuilder& fusionTxMinInputCount(size_t val) { m_currency.m_fusionTxMinInputCount = val; return *this; }
   CurrencyBuilder& fusionTxMinInOutCountRatio(size_t val) { m_currency.m_fusionTxMinInOutCountRatio = val; return *this; }
 
+  CurrencyBuilder& upgradeHeightV1(uint32_t val) { m_currency.m_upgradeHeightV1 = val; return *this; }
   CurrencyBuilder& upgradeHeightV2(uint32_t val) { m_currency.m_upgradeHeightV2 = val; return *this; }
   CurrencyBuilder& upgradeHeightV3(uint32_t val) { m_currency.m_upgradeHeightV3 = val; return *this; }
   CurrencyBuilder& upgradeVotingThreshold(unsigned int val);

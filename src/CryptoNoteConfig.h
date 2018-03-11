@@ -59,7 +59,8 @@ const size_t   DIFFICULTY_LAG                                = 15;  // !!!
 static_assert(2 * DIFFICULTY_CUT <= DIFFICULTY_WINDOW - 2, "Bad DIFFICULTY_WINDOW or DIFFICULTY_CUT");
 
 const size_t   MAX_BLOCK_SIZE_INITIAL                        =  20 * 1024;
-const uint64_t MAX_BLOCK_SIZE_GROWTH_SPEED_NUMERATOR         = 100 * 1024;
+const uint64_t MAX_BLOCK_SIZE_GROWTH_SPEED_NUMERATOR         = 500 * 1024;
+const uint64_t MAX_BLOCK_SIZE_GROWTH_SPEED_NUMERATOR_V1      = 100 * 1024;
 const uint64_t MAX_BLOCK_SIZE_GROWTH_SPEED_DENOMINATOR       = 365 * 24 * 60 * 60 / DIFFICULTY_TARGET;
 
 const uint64_t CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS     = 1;
@@ -79,6 +80,7 @@ const uint32_t KEY_IMAGE_CHECKING_BLOCK_INDEX                = 24000;
 // Hard fork block size
 const uint32_t UPGRADE_HEIGHT_V1                             = 250000;
 const uint32_t UPGRADE_HEIGHT_V2                             = 325000;
+const uint32_t UPGRADE_HEIGHT_V3                             = 337000;
 
 const char     CRYPTONOTE_BLOCKS_FILENAME[]                  = "blocks.bin";
 const char     CRYPTONOTE_BLOCKINDEXES_FILENAME[]            = "blockindexes.bin";

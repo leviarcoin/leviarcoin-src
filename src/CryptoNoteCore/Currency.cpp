@@ -126,6 +126,14 @@ size_t Currency::blockGrantedFullRewardZoneByHeight(uint32_t height) const {
   }
 }
 
+uint64_t Currency::maxBlockSizeGrowthSpeedNumeratorByHeight(uint32_t height) const {
+  if (height >= parameters::UPGRADE_HEIGHT_V3) {
+    return m_maxBlockSizeGrowthSpeedNumerator;
+  } else {
+    return CryptoNote::parameters::MAX_BLOCK_SIZE_GROWTH_SPEED_NUMERATOR_V1;
+  }
+}
+
 uint32_t Currency::upgradeHeight(uint8_t majorVersion) const {
   return static_cast<uint32_t>(-1);
 }
@@ -143,8 +151,9 @@ bool Currency::getBlockReward(uint32_t height, size_t medianSize, size_t current
   }
 
   size_t blockGrantedFullRewardZone = blockGrantedFullRewardZoneByHeight(height);
-  logger(TRACE) << "Max Height: " << m_maxBlockHeight << " Blockgrantedzn: " << blockGrantedFullRewardZone;
+
   medianSize = std::max(medianSize, blockGrantedFullRewardZone);
+  logger(TRACE) << "Max Height: " << m_maxBlockHeight << " blockGrantedFullRewardZone: " << blockGrantedFullRewardZone << " medianSize: " << medianSize << " currentBlockSize: " << currentBlockSize;
   if (currentBlockSize > UINT64_C(2) * medianSize) {
     logger(TRACE) << "Block cumulative size is too big: " << currentBlockSize << ", expected less than " << 2 * medianSize;
     return false;
@@ -160,9 +169,9 @@ bool Currency::getBlockReward(uint32_t height, size_t medianSize, size_t current
 }
 
 size_t Currency::maxBlockCumulativeSize(uint64_t height) const {
-  assert(height <= std::numeric_limits<uint64_t>::max() / m_maxBlockSizeGrowthSpeedNumerator);
+  assert(height <= std::numeric_limits<uint64_t>::max() / maxBlockSizeGrowthSpeedNumeratorByHeight(height));
   size_t maxSize = static_cast<size_t>(m_maxBlockSizeInitial +
-    (height * m_maxBlockSizeGrowthSpeedNumerator) / m_maxBlockSizeGrowthSpeedDenominator);
+    (height * maxBlockSizeGrowthSpeedNumeratorByHeight(height)) / m_maxBlockSizeGrowthSpeedDenominator);
   assert(maxSize >= m_maxBlockSizeInitial);
   return maxSize;
 }

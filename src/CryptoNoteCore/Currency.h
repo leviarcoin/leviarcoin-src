@@ -50,6 +50,7 @@ public:
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   size_t blockGrantedFullRewardZoneByBlockVersion(uint8_t blockMajorVersion) const;
   size_t blockGrantedFullRewardZoneByHeight(uint32_t height) const;
+  uint64_t maxBlockSizeGrowthSpeedNumeratorByHeight(uint32_t height) const;
   size_t minerTxBlobReservedSize() const { return m_minerTxBlobReservedSize; }
 
   size_t numberOfDecimalPlaces() const { return m_numberOfDecimalPlaces; }

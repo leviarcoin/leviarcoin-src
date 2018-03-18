@@ -17,16 +17,12 @@
 
 #pragma once
 
-#include <fstream>
 #include <condition_variable>
 #include <future>
 #include <memory>
 #include <mutex>
 
 #include <boost/program_options/variables_map.hpp>
-#include <boost/thread.hpp>
-#include <boost/chrono.hpp>
-#include <boost/filesystem.hpp>
 
 #include "IWalletLegacy.h"
 #include "PasswordContainer.h"
@@ -62,15 +58,6 @@ namespace CryptoNote
 
     const CryptoNote::Currency& currency() const { return m_currency; }
 
-	std::string getWalletFile();
-	std::string getWalletAddress();
-	std::string getBalance();
-	size_t getTxsCount();
-	std::string getTxs();
-	std::string transferWrapper(const std::vector<std::string> &args);
-	bool resetWrapper();
-	bool saveWrapper(std::string m_walletFilename);
-
   private:
 
     Logging::LoggerMessage success_msg_writer(bool color = false) {
@@ -101,12 +88,13 @@ namespace CryptoNote
     bool show_blockchain_height(const std::vector<std::string> &args);
     bool listTransfers(const std::vector<std::string> &args);
     bool transfer(const std::vector<std::string> &args);
-	std::string transferGui(const std::vector<std::string> &args);
     bool print_address(const std::vector<std::string> &args = std::vector<std::string>());
     bool save(const std::vector<std::string> &args);
     bool reset(const std::vector<std::string> &args);
-	bool set_log(const std::vector<std::string> &args);
-	bool ask_wallet_create_if_needed();
+    bool set_log(const std::vector<std::string> &args);
+
+    bool ask_wallet_create_if_needed();
+
     void printConnectionError() const;
 
     //---------------- IWalletLegacyObserver -------------------------
@@ -120,8 +108,7 @@ namespace CryptoNote
     virtual void connectionStatusUpdated(bool connected) override;
     //----------------------------------------------------------
 
-    friend class 
-		_progress_reporter_t;
+    friend class refresh_progress_reporter_t;
 
     class refresh_progress_reporter_t
     {
@@ -146,17 +133,6 @@ namespace CryptoNote
         if (std::chrono::milliseconds(1) < current_time - m_print_time || force) {
           std::cout << "Height " << height << " of " << m_blockchain_height << '\r';
           m_print_time = current_time;
-
-		  std::string file_name_reset = m_simple_wallet.getWalletFile() + ".reset_";
-		  boost::system::error_code ignore;
-		  if (boost::filesystem::exists(file_name_reset, ignore)) {
-			  // if exists write height
-			  std::ofstream file_stream_reset;
-			  if (!file_stream_reset.is_open()) file_stream_reset.open(file_name_reset);
-			  file_stream_reset << height << "|" << m_blockchain_height;
-			  file_stream_reset.flush();
-			  file_stream_reset.close();
-		  }
         }
       }
 
@@ -183,7 +159,6 @@ namespace CryptoNote
     std::string m_daemon_address;
     std::string m_daemon_host;
     uint16_t m_daemon_port;
-	std::string m_wallet_file_gui;
 
     std::string m_wallet_file;
 
@@ -202,6 +177,5 @@ namespace CryptoNote
     bool m_walletSynchronized;
     std::mutex m_walletSynchronizedMutex;
     std::condition_variable m_walletSynchronizedCV;
-
   };
 }

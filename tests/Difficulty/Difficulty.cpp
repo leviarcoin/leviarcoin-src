@@ -1,19 +1,32 @@
-// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2014-2018, The Monero Project
+// 
+// All rights reserved.
+// 
+// Redistribution and use in source and binary forms, with or without modification, are
+// permitted provided that the following conditions are met:
+// 
+// 1. Redistributions of source code must retain the above copyright notice, this list of
+//    conditions and the following disclaimer.
+// 
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list
+//    of conditions and the following disclaimer in the documentation and/or other
+//    materials provided with the distribution.
+// 
+// 3. Neither the name of the copyright holder nor the names of its contributors may be
+//    used to endorse or promote products derived from this software without specific
+//    prior written permission.
+// 
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+// THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+// STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+// THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// 
+// Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <cstddef>
 #include <cstdint>
@@ -22,25 +35,18 @@
 #include <vector>
 #include <algorithm>
 
-#include "CryptoNoteConfig.h"
-#include "CryptoNoteCore/Difficulty.h"
-#include "CryptoNoteCore/Currency.h"
-#include "Logging/ConsoleLogger.h"
+#include "cryptonote_config.h"
+#include "cryptonote_basic/difficulty.h"
 
 using namespace std;
+
+#define DEFAULT_TEST_DIFFICULTY_TARGET        120
 
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         cerr << "Wrong arguments" << endl;
         return 1;
     }
-    Logging::ConsoleLogger logger;
-    CryptoNote::CurrencyBuilder currencyBuilder(logger);
-    currencyBuilder.difficultyTarget(120);
-    currencyBuilder.difficultyWindow(720);
-    currencyBuilder.difficultyCut(60);
-    currencyBuilder.difficultyLag(15);
-    CryptoNote::Currency currency = currencyBuilder.currency();
     vector<uint64_t> timestamps, cumulative_difficulties;
     fstream data(argv[1], fstream::in);
     data.exceptions(fstream::badbit);
@@ -49,16 +55,16 @@ int main(int argc, char *argv[]) {
     size_t n = 0;
     while (data >> timestamp >> difficulty) {
         size_t begin, end;
-        if (n < currency.difficultyWindow() + currency.difficultyLag()) {
+        if (n < DIFFICULTY_WINDOW + DIFFICULTY_LAG) {
             begin = 0;
-            end = min(n, currency.difficultyWindow());
+            end = min(n, (size_t) DIFFICULTY_WINDOW);
         } else {
-            end = n - currency.difficultyLag();
-            begin = end - currency.difficultyWindow();
+            end = n - DIFFICULTY_LAG;
+            begin = end - DIFFICULTY_WINDOW;
         }
-        uint64_t res = currency.nextDifficulty(
+        uint64_t res = cryptonote::next_difficulty(
             vector<uint64_t>(timestamps.begin() + begin, timestamps.begin() + end),
-            vector<uint64_t>(cumulative_difficulties.begin() + begin, cumulative_difficulties.begin() + end));
+            vector<uint64_t>(cumulative_difficulties.begin() + begin, cumulative_difficulties.begin() + end), DEFAULT_TEST_DIFFICULTY_TARGET);
         if (res != difficulty) {
             cerr << "Wrong difficulty for block " << n << endl
                 << "Expected: " << difficulty << endl

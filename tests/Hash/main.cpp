@@ -1,19 +1,32 @@
-// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2014-2018, The Monero Project
+// 
+// All rights reserved.
+// 
+// Redistribution and use in source and binary forms, with or without modification, are
+// permitted provided that the following conditions are met:
+// 
+// 1. Redistributions of source code must retain the above copyright notice, this list of
+//    conditions and the following disclaimer.
+// 
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list
+//    of conditions and the following disclaimer in the documentation and/or other
+//    materials provided with the distribution.
+// 
+// 3. Neither the name of the copyright holder nor the names of its contributors may be
+//    used to endorse or promote products derived from this software without specific
+//    prior written permission.
+// 
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+// THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+// STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+// THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// 
+// Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <cstddef>
 #include <fstream>
@@ -21,38 +34,40 @@
 #include <ios>
 #include <string>
 
+#include "warnings.h"
 #include "crypto/hash.h"
-#include "../Io.h"
+#include "../io.h"
 
 using namespace std;
-typedef Crypto::Hash chash;
+using namespace crypto;
+typedef crypto::hash chash;
 
-Crypto::cn_context *context;
-
+PUSH_WARNINGS
+DISABLE_VS_WARNINGS(4297)
 extern "C" {
-#ifdef _MSC_VER
-#pragma warning(disable: 4297)
-#endif
-
   static void hash_tree(const void *data, size_t length, char *hash) {
     if ((length & 31) != 0) {
       throw ios_base::failure("Invalid input length for tree_hash");
     }
-    Crypto::tree_hash((const char (*)[32]) data, length >> 5, hash);
+    tree_hash((const char (*)[crypto::HASH_SIZE]) data, length >> 5, hash);
   }
-
-  static void slow_hash(const void *data, size_t length, char *hash) {
-    cn_slow_hash(*context, data, length, *reinterpret_cast<chash *>(hash));
+  static void cn_slow_hash_0(const void *data, size_t length, char *hash) {
+    return cn_slow_hash(data, length, hash, 0/*variant*/, 0/*prehashed*/);
+  }
+  static void cn_slow_hash_1(const void *data, size_t length, char *hash) {
+    return cn_slow_hash(data, length, hash, 1/*variant*/, 0/*prehashed*/);
   }
 }
+POP_WARNINGS
 
 extern "C" typedef void hash_f(const void *, size_t, char *);
 struct hash_func {
   const string name;
   hash_f &f;
-} hashes[] = {{"fast", Crypto::cn_fast_hash}, {"slow", slow_hash}, {"tree", hash_tree},
-  {"extra-blake", Crypto::hash_extra_blake}, {"extra-groestl", Crypto::hash_extra_groestl},
-  {"extra-jh", Crypto::hash_extra_jh}, {"extra-skein", Crypto::hash_extra_skein}};
+} hashes[] = {{"fast", cn_fast_hash}, {"slow", cn_slow_hash_0}, {"tree", hash_tree},
+  {"extra-blake", hash_extra_blake}, {"extra-groestl", hash_extra_groestl},
+  {"extra-jh", hash_extra_jh}, {"extra-skein", hash_extra_skein},
+  {"slow-1", cn_slow_hash_1}};
 
 int main(int argc, char *argv[]) {
   hash_f *f;
@@ -75,9 +90,6 @@ int main(int argc, char *argv[]) {
       f = &hf->f;
       break;
     }
-  }
-  if (f == slow_hash) {
-    context = new Crypto::cn_context();
   }
   input.open(argv[2], ios_base::in);
   for (;;) {

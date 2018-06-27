@@ -1,375 +1,227 @@
-// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
+// Copyright (c) 2014-2018, The Monero Project
+// 
+// All rights reserved.
 //
-// This file is part of Bytecoin.
+// Redistribution and use in source and binary forms, with or without modification, are
+// permitted provided that the following conditions are met:
 //
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// 1. Redistributions of source code must retain the above copyright notice, this list of
+//    conditions and the following disclaimer.
 //
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list
+//    of conditions and the following disclaimer in the documentation and/or other
+//    materials provided with the distribution.
 //
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// 3. Neither the name of the copyright holder nor the names of its contributors may be
+//    used to endorse or promote products derived from this software without specific
+//    prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+// THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+// STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+// THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include <fstream>
+#include <memory>
+#include <stdexcept>
+#include <boost/algorithm/string/split.hpp>
+#include "misc_log_ex.h"
+#include "daemon/daemon.h"
+#include "rpc/daemon_handler.h"
+#include "rpc/zmq_server.h"
 
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
-#include <boost/thread.hpp>
-#include <boost/chrono.hpp>
-
-#include "DaemonCommandsHandler.h"
-
-#include "Common/ScopeExit.h"
-#include "Common/SignalHandler.h"
-#include "Common/StdOutputStream.h"
-#include "Common/StdInputStream.h"
-#include "Common/PathTools.h"
-#include "Common/Util.h"
-#include "crypto/hash.h"
-#include "CryptoNoteCore/Core.h"
-#include "CryptoNoteCore/Currency.h"
-#include "CryptoNoteCore/DatabaseBlockchainCache.h"
-#include "CryptoNoteCore/DatabaseBlockchainCacheFactory.h"
-#include "CryptoNoteCore/MainChainStorage.h"
-#include "CryptoNoteCore/MinerConfig.h"
-#include "CryptoNoteCore/RocksDBWrapper.h"
-#include "CryptoNoteProtocol/CryptoNoteProtocolHandler.h"
-#include "P2p/NetNode.h"
-#include "P2p/NetNodeConfig.h"
-#include "Rpc/RpcServer.h"
-#include "Rpc/RpcServerConfig.h"
-#include "Rpc/HttpClient.h"
-#include "Serialization/BinaryInputStreamSerializer.h"
-#include "Serialization/BinaryOutputStreamSerializer.h"
+#include "common/password.h"
+#include "common/util.h"
+#include "daemon/core.h"
+#include "daemon/p2p.h"
+#include "daemon/protocol.h"
+#include "daemon/rpc.h"
+#include "daemon/command_server.h"
+#include "daemon/command_server.h"
+#include "daemon/command_line_args.h"
 #include "version.h"
 
-#include <Logging/LoggerManager.h>
+using namespace epee;
 
-#ifndef AUTO_VAL_INIT
-#define AUTO_VAL_INIT(n) boost::value_initialized<decltype(n)>()
-#endif
+#include <functional>
 
-#if defined(WIN32)
-#include <crtdbg.h>
-#endif
+#undef MONERO_DEFAULT_LOG_CATEGORY
+#define MONERO_DEFAULT_LOG_CATEGORY "daemon"
 
-using Common::JsonValue;
-using namespace CryptoNote;
-using namespace Logging;
+namespace daemonize {
 
-namespace po = boost::program_options;
+struct t_internals {
+private:
+  t_protocol protocol;
+public:
+  t_core core;
+  t_p2p p2p;
+  std::vector<std::unique_ptr<t_rpc>> rpcs;
 
-namespace
-{
-  const command_line::arg_descriptor<std::string> arg_config_file = {"config-file", "Specify configuration file", std::string(CryptoNote::CRYPTONOTE_NAME) + ".conf"};
-  const command_line::arg_descriptor<bool>        arg_os_version  = {"os-version", ""};
-  const command_line::arg_descriptor<std::string> arg_log_file    = {"log-file", "", ""};
-  const command_line::arg_descriptor<int>         arg_log_level   = {"log-level", "", 2}; // info level
-  const command_line::arg_descriptor<bool>        arg_console = { "no-console", "Disable daemon console commands" };
-  const command_line::arg_descriptor<bool>        arg_guihelpers = { "gui-helpers", "Activate GUI helpers" };
-  const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
-    "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
-}
+  t_internals(
+      boost::program_options::variables_map const & vm
+    )
+    : core{vm}
+    , protocol{vm, core, command_line::get_arg(vm, cryptonote::arg_offline)}
+    , p2p{vm, protocol}
+  {
+    // Handle circular dependencies
+    protocol.set_p2p_endpoint(p2p.get());
+    core.set_protocol(protocol.get());
 
-bool command_line_preprocessor(const boost::program_options::variables_map& vm, LoggerRef& logger);
+    const auto testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
+    const auto stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
+    const auto restricted = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_restricted_rpc);
+    const auto main_rpc_port = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
+    rpcs.emplace_back(new t_rpc{vm, core, p2p, restricted, testnet ? cryptonote::TESTNET : stagenet ? cryptonote::STAGENET : cryptonote::MAINNET, main_rpc_port, "core"});
 
-JsonValue buildLoggerConfiguration(Level level, const std::string& logfile) {
-  JsonValue loggerConfiguration(JsonValue::OBJECT);
-  loggerConfiguration.insert("globalLevel", static_cast<int64_t>(level));
-
-  JsonValue& cfgLoggers = loggerConfiguration.insert("loggers", JsonValue::ARRAY);
-
-  JsonValue& fileLogger = cfgLoggers.pushBack(JsonValue::OBJECT);
-  fileLogger.insert("type", "file");
-  fileLogger.insert("filename", logfile);
-  fileLogger.insert("level", static_cast<int64_t>(TRACE));
-
-  JsonValue& consoleLogger = cfgLoggers.pushBack(JsonValue::OBJECT);
-  consoleLogger.insert("type", "console");
-  consoleLogger.insert("level", static_cast<int64_t>(TRACE));
-  consoleLogger.insert("pattern", "%D %T %L ");
-
-  return loggerConfiguration;
-}
-
-void wait(int seconds) {
-	boost::this_thread::sleep_for(boost::chrono::seconds{ seconds });
-}
-
-COMMAND_RPC_GET_INFO::response get_daemon_info(Core &m_core, NodeServer &m_p2p, CryptoNoteProtocolHandler &m_protocol) {
-	COMMAND_RPC_GET_INFO::response res;
-	res.height = m_core.getTopBlockIndex() + 1;
-	res.outgoing_connections_count = m_p2p.get_outgoing_connections_count();
-	//res.incoming_connections_count = m_p2p.get_connections_count() - res.outgoing_connections_count;
-	res.incoming_connections_count = m_p2p.get_connections_count();
-	res.last_known_block_index = std::max(static_cast<uint32_t>(1), m_protocol.getObservedHeight()) - 1;
-	return res;
-}
-
-void gui_helper(std::string datadir, Core &m_core, NodeServer &m_p2p, CryptoNoteProtocolHandler &m_protocol) {
-	boost::this_thread::interruption_enabled();
-	// Write file
-	const std::string file_name = datadir + "/STATUS";
-	std::ofstream file_stream;
-	while (true) {
-		try {
-			if (!file_stream.is_open()) file_stream.open(file_name);
-			CryptoNote::COMMAND_RPC_GET_INFO::response getInfoResp = AUTO_VAL_INIT(getInfoResp);
-			COMMAND_RPC_GET_INFO::response res = get_daemon_info(m_core, m_p2p, m_protocol);
-
-			file_stream << res.last_known_block_index << "|" << res.height << "|" << res.incoming_connections_count;
-			file_stream.close();
-		} catch (...) {
-			wait(3);
-			continue;
-		}
-		boost::this_thread::interruption_point();
-		wait(5);
-	}
-}
-
-int main(int argc, char* argv[])
-{
-
-#ifdef WIN32
-  _CrtSetDbgFlag ( _CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF );
-#endif
-
-  LoggerManager logManager;
-  LoggerRef logger(logManager, "daemon");
-
-  try {
-    po::options_description desc_cmd_only("Command line options");
-    po::options_description desc_cmd_sett("Command line options and settings options");
-
-    command_line::add_arg(desc_cmd_only, command_line::arg_help);
-    command_line::add_arg(desc_cmd_only, command_line::arg_version);
-    command_line::add_arg(desc_cmd_only, arg_os_version);
-    // tools::get_default_data_dir() can't be called during static initialization
-    command_line::add_arg(desc_cmd_only, command_line::arg_data_dir, Tools::getDefaultDataDirectory());
-    command_line::add_arg(desc_cmd_only, arg_config_file);
-
-    command_line::add_arg(desc_cmd_sett, arg_log_file);
-    command_line::add_arg(desc_cmd_sett, arg_log_level);
-    command_line::add_arg(desc_cmd_sett, arg_console);
-	command_line::add_arg(desc_cmd_sett, arg_testnet_on);
-	command_line::add_arg(desc_cmd_sett, arg_guihelpers);
-
-    RpcServerConfig::initOptions(desc_cmd_sett);
-    NetNodeConfig::initOptions(desc_cmd_sett);
-    DataBaseConfig::initOptions(desc_cmd_sett);
-
-    po::options_description desc_options("Allowed options");
-    desc_options.add(desc_cmd_only).add(desc_cmd_sett);
-
-    po::variables_map vm;
-    boost::filesystem::path data_dir_path;
-    bool r = command_line::handle_error_helper(desc_options, [&]()
+    auto restricted_rpc_port_arg = cryptonote::core_rpc_server::arg_rpc_restricted_bind_port;
+    if(!command_line::is_arg_defaulted(vm, restricted_rpc_port_arg))
     {
-      po::store(po::parse_command_line(argc, argv, desc_options), vm);
-
-      if (command_line::get_arg(vm, command_line::arg_help))
-      {
-        std::cout << CryptoNote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL << ENDL;
-        std::cout << desc_options << std::endl;
-        return false;
-      }
-
-      std::string data_dir = command_line::get_arg(vm, command_line::arg_data_dir);
-      std::string config = command_line::get_arg(vm, arg_config_file);
-
-      data_dir_path = data_dir;
-      boost::filesystem::path config_path(config);
-      if (!config_path.has_parent_path()) {
-        config_path = data_dir_path / config_path;
-      }
-
-      boost::system::error_code ec;
-      if (boost::filesystem::exists(config_path, ec)) {
-        po::store(po::parse_config_file<char>(config_path.string<std::string>().c_str(), desc_cmd_sett), vm);
-      }
-      po::notify(vm);
-      return true;
-    });
-
-    if (!r)
-      return 1;
-  
-    auto modulePath = Common::NativePathToGeneric(argv[0]);
-    auto cfgLogFile = Common::NativePathToGeneric(command_line::get_arg(vm, arg_log_file));
-
-    if (cfgLogFile.empty()) {
-      cfgLogFile = Common::ReplaceExtenstion(modulePath, ".log");
-    } else {
-      if (!Common::HasParentPath(cfgLogFile)) {
-        cfgLogFile = Common::CombinePath(Common::GetPathDirectory(modulePath), cfgLogFile);
-      }
+      auto restricted_rpc_port = command_line::get_arg(vm, restricted_rpc_port_arg);
+      rpcs.emplace_back(new t_rpc{vm, core, p2p, true, testnet ? cryptonote::TESTNET : stagenet ? cryptonote::STAGENET : cryptonote::MAINNET, restricted_rpc_port, "restricted"});
     }
-
-    Level cfgLogLevel = static_cast<Level>(static_cast<int>(Logging::ERROR) + command_line::get_arg(vm, arg_log_level));
-
-    // configure logging
-    logManager.configure(buildLoggerConfiguration(cfgLogLevel, cfgLogFile));
-
-    logger(INFO) << CryptoNote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG;
-
-    if (command_line_preprocessor(vm, logger)) {
-      return 0;
-    }
-
-    logger(INFO) << "Module folder: " << argv[0];
-
-    bool testnet_mode = command_line::get_arg(vm, arg_testnet_on);
-    if (testnet_mode) {
-      logger(INFO) << "Starting in testnet mode!";
-    }
-
-    //create objects and link them
-    CryptoNote::CurrencyBuilder currencyBuilder(logManager);
-    currencyBuilder.testnet(testnet_mode);
-    CryptoNote::Currency currency = currencyBuilder.currency();
-
-    CryptoNote::Checkpoints checkpoints(logManager);
-    if (!testnet_mode) {
-      for (const auto& cp : CryptoNote::CHECKPOINTS) {
-        checkpoints.addCheckpoint(cp.index, cp.blockId);
-      }
-    }
-    
-    NetNodeConfig netNodeConfig;
-    netNodeConfig.init(vm);
-    netNodeConfig.setTestnet(testnet_mode);
-
-    RpcServerConfig rpcConfig;
-    rpcConfig.init(vm);
-
-    DataBaseConfig dbConfig;
-    dbConfig.init(vm);
-
-    if (dbConfig.isConfigFolderDefaulted()) {
-      if (!Tools::create_directories_if_necessary(dbConfig.getDataDir())) {
-        throw std::runtime_error("Can't create directory: " + dbConfig.getDataDir());
-      }
-    } else {
-      if (!Tools::directoryExists(dbConfig.getDataDir())) {
-        throw std::runtime_error("Directory does not exist: " + dbConfig.getDataDir());
-      }
-    }
-
-    RocksDBWrapper database(logManager);
-    database.init(dbConfig);
-    Tools::ScopeExit dbShutdownOnExit([&database] () { database.shutdown(); });
-
-    if (!DatabaseBlockchainCache::checkDBSchemeVersion(database, logManager))
-    {
-      dbShutdownOnExit.cancel();
-      database.shutdown();
-
-      database.destoy(dbConfig);
-
-      database.init(dbConfig);
-      dbShutdownOnExit.resume();
-    }
-
-    System::Dispatcher dispatcher;
-    logger(INFO) << "Initializing core...";
-    CryptoNote::Core ccore(
-      currency,
-      logManager,
-      std::move(checkpoints),
-      dispatcher,
-      std::unique_ptr<IBlockchainCacheFactory>(new DatabaseBlockchainCacheFactory(database, logger.getLogger())),
-      createSwappedMainChainStorage(data_dir_path.string(), currency));
-	
-    ccore.load();
-    logger(INFO) << "Core initialized OK";
-
-    CryptoNote::CryptoNoteProtocolHandler cprotocol(currency, dispatcher, ccore, nullptr, logManager);
-    CryptoNote::NodeServer p2psrv(dispatcher, cprotocol, logManager);
-    CryptoNote::RpcServer rpcServer(dispatcher, logManager, ccore, p2psrv, cprotocol);
-
-    cprotocol.set_p2p_endpoint(&p2psrv);
-    DaemonCommandsHandler dch(ccore, p2psrv, logManager);
-    logger(INFO) << "Initializing p2p server...";
-    if (!p2psrv.init(netNodeConfig)) {
-      logger(ERROR, BRIGHT_RED) << "Failed to initialize p2p server.";
-      return 1;
-    }
-
-    logger(INFO) << "P2p server initialized OK";
-
-    if (!command_line::has_arg(vm, arg_console)) {
-      dch.start_handling();
-    }
-
-    logger(INFO) << "Starting core rpc server on address " << rpcConfig.getBindAddress();
-    rpcServer.start(rpcConfig.bindIp, rpcConfig.bindPort);
-    logger(INFO) << "Core rpc server started ok";
-
-    Tools::SignalHandler::install([&dch, &p2psrv] {
-      dch.stop_handling();
-      p2psrv.sendStopSignal();
-    });
-
-	boost::thread t;
-	if (command_line::has_arg(vm, arg_guihelpers)) {
-		// Start thread
-		logger(INFO) << "Starting GUI helper... " << data_dir_path.string();
-		boost::thread t(boost::bind(&gui_helper, data_dir_path.string(), boost::ref(ccore), boost::ref(p2psrv), boost::ref(cprotocol)));
-		t.detach();
-	}
-	
-    logger(INFO) << "Starting p2p net loop...";
-    p2psrv.run();
-    logger(INFO) << "p2p net loop stopped";
-
-	if (command_line::has_arg(vm, arg_guihelpers)) {
-		t.interrupt();
-		logger(INFO) << "GUI helper stopped";
-	}
-
-    dch.stop_handling();
-
-    //stop components
-    logger(INFO) << "Stopping core rpc server...";
-    rpcServer.stop();
-
-    //deinitialize components
-    logger(INFO) << "Deinitializing p2p...";
-    p2psrv.deinit();
-
-    cprotocol.set_p2p_endpoint(nullptr);
-    ccore.save();
-
-  } catch (const std::exception& e) {
-    logger(ERROR, BRIGHT_RED) << "Exception: " << e.what();
-    return 1;
   }
+};
 
-  logger(INFO) << "Node stopped.";
-  return 0;
+void t_daemon::init_options(boost::program_options::options_description & option_spec)
+{
+  t_core::init_options(option_spec);
+  t_p2p::init_options(option_spec);
+  t_rpc::init_options(option_spec);
 }
 
-bool command_line_preprocessor(const boost::program_options::variables_map &vm, LoggerRef &logger) {
-  bool exit = false;
+t_daemon::t_daemon(
+    boost::program_options::variables_map const & vm
+  )
+  : mp_internals{new t_internals{vm}}
+{
+  zmq_rpc_bind_port = command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_port);
+  zmq_rpc_bind_address = command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_ip);
+}
 
-  if (command_line::get_arg(vm, command_line::arg_version)) {
-    std::cout << CryptoNote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL;
-    exit = true;
-  }
-  if (command_line::get_arg(vm, arg_os_version)) {
-    std::cout << "OS: " << Tools::get_os_version_string() << ENDL;
-    exit = true;
-  }
+t_daemon::~t_daemon() = default;
 
-  if (exit) {
+// MSVC is brain-dead and can't default this...
+t_daemon::t_daemon(t_daemon && other)
+{
+  if (this != &other)
+  {
+    mp_internals = std::move(other.mp_internals);
+    other.mp_internals.reset(nullptr);
+  }
+}
+
+// or this
+t_daemon & t_daemon::operator=(t_daemon && other)
+{
+  if (this != &other)
+  {
+    mp_internals = std::move(other.mp_internals);
+    other.mp_internals.reset(nullptr);
+  }
+  return *this;
+}
+
+bool t_daemon::run(bool interactive)
+{
+  if (nullptr == mp_internals)
+  {
+    throw std::runtime_error{"Can't run stopped daemon"};
+  }
+  tools::signal_handler::install(std::bind(&daemonize::t_daemon::stop_p2p, this));
+
+  try
+  {
+    if (!mp_internals->core.run())
+      return false;
+
+    for(auto& rpc: mp_internals->rpcs)
+      rpc->run();
+
+    std::unique_ptr<daemonize::t_command_server> rpc_commands;
+    if (interactive && mp_internals->rpcs.size())
+    {
+      // The first three variables are not used when the fourth is false
+      rpc_commands.reset(new daemonize::t_command_server(0, 0, boost::none, false, mp_internals->rpcs.front()->get_server()));
+      rpc_commands->start_handling(std::bind(&daemonize::t_daemon::stop_p2p, this));
+    }
+
+    cryptonote::rpc::DaemonHandler rpc_daemon_handler(mp_internals->core.get(), mp_internals->p2p.get());
+    cryptonote::rpc::ZmqServer zmq_server(rpc_daemon_handler);
+
+    if (!zmq_server.addTCPSocket(zmq_rpc_bind_address, zmq_rpc_bind_port))
+    {
+      LOG_ERROR(std::string("Failed to add TCP Socket (") + zmq_rpc_bind_address
+          + ":" + zmq_rpc_bind_port + ") to ZMQ RPC Server");
+
+      if (rpc_commands)
+        rpc_commands->stop_handling();
+
+      for(auto& rpc : mp_internals->rpcs)
+        rpc->stop();
+
+      return false;
+    }
+
+    MINFO("Starting ZMQ server...");
+    zmq_server.run();
+
+    MINFO(std::string("ZMQ server started at ") + zmq_rpc_bind_address
+          + ":" + zmq_rpc_bind_port + ".");
+
+    mp_internals->p2p.run(); // blocks until p2p goes down
+
+    if (rpc_commands)
+      rpc_commands->stop_handling();
+
+    zmq_server.stop();
+
+    for(auto& rpc : mp_internals->rpcs)
+      rpc->stop();
+    mp_internals->core.get().get_miner().stop();
+    MGINFO("Node stopped.");
     return true;
   }
-
-  return false;
+  catch (std::exception const & ex)
+  {
+    MFATAL("Uncaught exception! " << ex.what());
+    return false;
+  }
+  catch (...)
+  {
+    MFATAL("Uncaught exception!");
+    return false;
+  }
 }
+
+void t_daemon::stop()
+{
+  if (nullptr == mp_internals)
+  {
+    throw std::runtime_error{"Can't stop stopped daemon"};
+  }
+  mp_internals->core.get().get_miner().stop();
+  mp_internals->p2p.stop();
+  for(auto& rpc : mp_internals->rpcs)
+    rpc->stop();
+
+  mp_internals.reset(nullptr); // Ensure resources are cleaned up before we return
+}
+
+void t_daemon::stop_p2p()
+{
+  if (nullptr == mp_internals)
+  {
+    throw std::runtime_error{"Can't send stop signal to a stopped daemon"};
+  }
+  mp_internals->p2p.get().send_stop_signal();
+}
+
+} // namespace daemonize

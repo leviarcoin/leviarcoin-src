@@ -1,108 +1,125 @@
-add_definitions(-DSTATICLIB)
+# Copyright (c) 2014-2018, The Monero Project
+# 
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
+# 
+# 1. Redistributions of source code must retain the above copyright notice, this list of
+#    conditions and the following disclaimer.
+# 
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list
+#    of conditions and the following disclaimer in the documentation and/or other
+#    materials provided with the distribution.
+# 
+# 3. Neither the name of the copyright holder nor the names of its contributors may be
+#    used to endorse or promote products derived from this software without specific
+#    prior written permission.
+# 
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+# THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# 
+# Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-include_directories(${gtest_SOURCE_DIR}/include ${gtest_SOURCE_DIR} ../version)
+# The docs say this only affects grouping in IDEs
+set(folder "tests")
+set(TEST_DATA_DIR "${CMAKE_CURRENT_LIST_DIR}/data")
 
-file(GLOB_RECURSE CoreTests CoreTests/*)
-file(GLOB_RECURSE CryptoTests crypto/*)
-file(GLOB_RECURSE FunctionalTests FunctionalTests/*)
-file(GLOB_RECURSE IntegrationTestLibrary IntegrationTestLib/*)
-file(GLOB_RECURSE IntegrationTests IntegrationTests/*)
-file(GLOB_RECURSE NodeRpcProxyTests NodeRpcProxyTests/*)
-file(GLOB_RECURSE PerformanceTests PerformanceTests/*)
-file(GLOB_RECURSE SystemTests System/*)
-file(GLOB_RECURSE TestGenerator TestGenerator/*)
-file(GLOB_RECURSE TransfersTests TransfersTests/*)
-file(GLOB_RECURSE UnitTests UnitTests/*)
-file(GLOB_RECURSE TestsCommon Common/*)
-
-file(GLOB_RECURSE CryptoNoteProtocol ../src/CryptoNoteProtocol/*)
-file(GLOB_RECURSE P2p ../src/P2p/*)
-
-source_group("" FILES ${CryptoTests} ${FunctionalTests} ${IntegrationTestLibrary} ${IntegrationTests} ${NodeRpcProxyTests} ${PerformanceTests} ${SystemTests} ${TestGenerator} ${TransfersTests} ${UnitTests})
-source_group("" FILES ${CryptoNoteProtocol} ${P2p})
-
-add_library(IntegrationTestLibrary ${IntegrationTestLibrary})
-add_library(TestGenerator ${TestGenerator})
-add_library(UnitTestsLib ${UnitTests})
-add_library(TestsCommon ${TestsCommon})
-
-add_executable(CoreTests ${CoreTests})
-add_executable(CryptoTests ${CryptoTests})
-add_executable(IntegrationTests ${IntegrationTests})
-add_executable(NodeRpcProxyTests ${NodeRpcProxyTests})
-add_executable(PerformanceTests ${PerformanceTests})
-add_executable(SystemTests ${SystemTests})
-add_executable(TransfersTests ${TransfersTests})
-add_executable(UnitTests ${UnitTests})
-
-add_executable(DifficultyTests Difficulty/Difficulty.cpp)
-add_executable(HashTargetTests HashTarget.cpp)
-add_executable(HashTests Hash/main.cpp)
-
-target_link_libraries(CoreTests TestGenerator TestsCommon CryptoNoteCore Serialization System Logging Common Crypto BlockchainExplorer UnitTestsLib ${Boost_LIBRARIES})
-target_link_libraries(IntegrationTests IntegrationTestLibrary TestsCommon Wallet NodeRpcProxy InProcessNode P2P Rpc Http Transfers Serialization System CryptoNoteCore Logging Common Crypto BlockchainExplorer gtest upnpc-static ${Boost_LIBRARIES})
-target_link_libraries(NodeRpcProxyTests NodeRpcProxy CryptoNoteCore Rpc Http Serialization System Logging Common Crypto ${Boost_LIBRARIES})
-target_link_libraries(PerformanceTests CryptoNoteCore Serialization Logging Common Crypto ${Boost_LIBRARIES})
-target_link_libraries(SystemTests System gtest_main)
-if (MSVC)
-  target_link_libraries(SystemTests ws2_32)
-  target_link_libraries(NodeRpcProxyTests ws2_32)
-  target_link_libraries(CoreTests ws2_32)
+if (WIN32 AND STATIC)
+  add_definitions(-DSTATICLIB)
+  # miniupnp changed their static define
+  add_definitions(-DMINIUPNP_STATICLIB)
 endif ()
 
-target_link_libraries(TransfersTests IntegrationTestLibrary TestsCommon Wallet gtest_main InProcessNode NodeRpcProxy P2P Rpc Http BlockchainExplorer CryptoNoteCore Serialization System Logging Transfers Common Crypto upnpc-static ${Boost_LIBRARIES})
-target_link_libraries(UnitTests gtest_main PaymentGate Wallet TestGenerator InProcessNode NodeRpcProxy Rpc P2P upnpc-static Http Transfers Serialization System Logging BlockchainExplorer CryptoNoteCore Common Crypto ${Boost_LIBRARIES})
+find_package(GTest)
 
-target_link_libraries(DifficultyTests CryptoNoteCore Serialization Crypto Logging Common ${Boost_LIBRARIES})
-target_link_libraries(HashTargetTests CryptoNoteCore Crypto)
-target_link_libraries(HashTests Crypto)
+if (GTest_FOUND)
+  include_directories(SYSTEM ${GTEST_INCLUDE_DIRS})
+else ()
+  message(STATUS "GTest not found on the system: will use GTest bundled with this source")
 
-if(NOT MSVC)
-  set_property(TARGET gtest gtest_main IntegrationTestLibrary IntegrationTests TestGenerator UnitTests SystemTests HashTargetTests TransfersTests APPEND_STRING PROPERTY COMPILE_FLAGS " -Wno-undef -Wno-sign-compare")
+  include(ExternalProject)
+  ExternalProject_Add(googletest
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/gtest
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/gtest
+    DOWNLOAD_COMMAND ""
+    UPDATE_COMMAND ""
+    INSTALL_COMMAND ""
+  )
+  add_library(gtest      UNKNOWN IMPORTED)
+  add_library(gtest_main UNKNOWN IMPORTED)
+  set_target_properties(gtest PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/gtest/${CMAKE_STATIC_LIBRARY_PREFIX}gtest${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  )
+  set_target_properties(gtest_main PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/gtest/${CMAKE_STATIC_LIBRARY_PREFIX}gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  )
+  add_dependencies(gtest      googletest)
+  add_dependencies(gtest_main googletest)
+
+  # Emulate the FindGTest module's variable.
+  set(GTEST_LIBRARIES gtest gtest_main)
+  include_directories(SYSTEM "${CMAKE_CURRENT_SOURCE_DIR}/gtest/include")
+endif (GTest_FOUND)
+
+file(COPY
+  data/wallet_9svHk1.keys
+  data/wallet_9svHk1
+  data/outputs
+  data/unsigned_monero_tx
+  data/signed_monero_tx
+  DESTINATION data)
+
+add_subdirectory(core_tests)
+add_subdirectory(fuzz)
+add_subdirectory(crypto)
+add_subdirectory(functional_tests)
+add_subdirectory(performance_tests)
+add_subdirectory(core_proxy)
+add_subdirectory(unit_tests)
+add_subdirectory(difficulty)
+add_subdirectory(hash)
+add_subdirectory(net_load_tests)
+if (BUILD_GUI_DEPS)
+  add_subdirectory(libwallet_api_tests)
 endif()
 
-add_custom_target(tests DEPENDS IntegrationTests NodeRpcProxyTests PerformanceTests SystemTests TransfersTests UnitTests DifficultyTests HashTargetTests)
+# add_subdirectory(daemon_tests)
 
-set_property(TARGET
-  tests
+set(hash_targets_sources
+  hash-target.cpp)
 
-  IntegrationTestLibrary
-  TestGenerator
+set(hash_targets_headers)
 
-  CoreTests
-  CryptoTests
-  IntegrationTests
-  NodeRpcProxyTests
-  PerformanceTests
-  SystemTests
-  TransfersTests
-  UnitTests
+add_executable(hash-target-tests
+  ${hash_targets_sources}
+  ${hash_targets_headers})
+target_link_libraries(hash-target-tests
+  PRIVATE
+    cryptonote_core)
+set_property(TARGET hash-target-tests
+  PROPERTY
+    FOLDER "${folder}")
 
-  DifficultyTests
-  HashTargetTests
-  HashTests
-PROPERTY FOLDER "tests")
+add_test(
+  NAME    hash-target
+  COMMAND hash-target-tests)
 
-add_dependencies(IntegrationTestLibrary version)
+set(enabled_tests
+    core_tests
+    difficulty
+    hash
+    performance_tests
+    core_proxy
+    fuzz
+    unit_tests)
 
-set_property(TARGET CoreTests PROPERTY OUTPUT_NAME "core_tests")
-set_property(TARGET CryptoTests PROPERTY OUTPUT_NAME "crypto_tests")
-set_property(TARGET IntegrationTests PROPERTY OUTPUT_NAME "integration_tests")
-set_property(TARGET NodeRpcProxyTests PROPERTY OUTPUT_NAME "node_rpc_proxy_tests")
-set_property(TARGET PerformanceTests PROPERTY OUTPUT_NAME "performance_tests")
-set_property(TARGET SystemTests PROPERTY OUTPUT_NAME "system_tests")
-set_property(TARGET TransfersTests PROPERTY OUTPUT_NAME "transfers_tests")
-set_property(TARGET UnitTests PROPERTY OUTPUT_NAME "unit_tests")
-set_property(TARGET DifficultyTests PROPERTY OUTPUT_NAME "difficulty_tests")
-set_property(TARGET HashTargetTests PROPERTY OUTPUT_NAME "hash_target_tests")
-set_property(TARGET HashTests PROPERTY OUTPUT_NAME "hash_tests")
-
-add_test(CoreTests core_tests --generate_and_play_test_data)
-add_test(CryptoTests crypto_tests ${CMAKE_CURRENT_SOURCE_DIR}/crypto/tests.txt)
-add_test(DifficultyTests difficulty_tests ${CMAKE_CURRENT_SOURCE_DIR}/Difficulty/data.txt)
-foreach(hash IN ITEMS fast slow tree extra-blake extra-groestl extra-jh extra-skein)
-  add_test(hash-${hash} hash_tests ${hash} ${CMAKE_CURRENT_SOURCE_DIR}/Hash/tests-${hash}.txt)
-endforeach(hash)
-add_test(HashTargetTests hash_target_tests)
-add_test(SystemTests system_tests)
-add_test(UnitTests unit_tests)
+add_custom_target(tests DEPENDS enabled_tests)
+set_property(TARGET tests PROPERTY FOLDER "${folder}")

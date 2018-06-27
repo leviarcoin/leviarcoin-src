@@ -1,95 +1,151 @@
-add_definitions(-DSTATICLIB)
+# Copyright (c) 2014-2018, The Monero Project
+#
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this list of
+#    conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list
+#    of conditions and the following disclaimer in the documentation and/or other
+#    materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors may be
+#    used to endorse or promote products derived from this software without specific
+#    prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+# THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+# STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+# THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+# Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-include_directories(${CMAKE_SOURCE_DIR}/external/rocksdb/include)
-
-file(GLOB_RECURSE BlockchainExplorer BlockchainExplorer/*)
-file(GLOB_RECURSE Common Common/*)
-file(GLOB_RECURSE ConnectivityTool ConnectivityTool/*)
-file(GLOB_RECURSE Crypto crypto/*)
-file(GLOB_RECURSE CryptoNoteCore CryptoNoteCore/* CryptoNoteConfig.h)
-file(GLOB_RECURSE CryptoNoteProtocol CryptoNoteProtocol/*)
-file(GLOB_RECURSE Daemon Daemon/*)
-file(GLOB_RECURSE Http HTTP/*)
-file(GLOB_RECURSE InProcessNode InProcessNode/*)
-file(GLOB_RECURSE Logging Logging/*)
-file(GLOB_RECURSE NodeRpcProxy NodeRpcProxy/*)
-file(GLOB_RECURSE P2p P2p/*)
-file(GLOB_RECURSE Rpc Rpc/*)
-file(GLOB_RECURSE Serialization Serialization/*)
-file(GLOB_RECURSE SimpleWallet SimpleWallet/*)
-file(GLOB_RECURSE MiniWallet MiniWallet/*)
-if(MSVC)
-file(GLOB_RECURSE System System/* Platform/Windows/System/*)
-elseif(APPLE)
-file(GLOB_RECURSE System System/* Platform/OSX/System/* Platform/Posix/System/*)
-else()
-file(GLOB_RECURSE System System/* Platform/Linux/System/* Platform/Posix/System/*)
-endif()
-file(GLOB_RECURSE Transfers Transfers/*)
-file(GLOB_RECURSE Wallet Wallet/*)
-file(GLOB_RECURSE WalletLegacy WalletLegacy/*)
-
-file(GLOB_RECURSE JsonRpcServer JsonRpcServer/*)
-
-file(GLOB_RECURSE PaymentGate PaymentGate/*)
-file(GLOB_RECURSE PaymentGateService PaymentGateService/*)
-file(GLOB_RECURSE Miner Miner/*)
-
-source_group("" FILES $${Common} ${ConnectivityTool} ${Crypto} ${CryptoNoteCore} ${CryptoNoteProtocol} ${Daemon} ${JsonRpcServer} ${Http} ${Logging} ${NodeRpcProxy} ${P2p} ${Rpc} ${Serialization} ${SimpleWallet} ${MiniWallet} ${System} ${Transfers} ${Wallet} ${WalletLegacy})
-
-add_library(BlockchainExplorer ${BlockchainExplorer})
-add_library(Common ${Common})
-add_library(Crypto ${Crypto})
-add_library(CryptoNoteCore ${CryptoNoteCore})
-add_library(Http ${Http})
-add_library(InProcessNode ${InProcessNode})
-add_library(Logging ${Logging})
-add_library(NodeRpcProxy ${NodeRpcProxy})
-add_library(Rpc ${Rpc})
-add_library(P2P ${CryptoNoteProtocol} ${P2p})
-add_library(Serialization ${Serialization})
-add_library(System ${System})
-add_library(Transfers ${Transfers})
-add_library(Wallet ${Wallet} ${WalletLegacy})
-add_library(PaymentGate ${PaymentGate})
-add_library(JsonRpcServer ${JsonRpcServer})
-
-add_executable(ConnectivityTool ${ConnectivityTool})
-add_executable(Daemon ${Daemon})
-add_executable(SimpleWallet ${SimpleWallet})
-add_executable(MiniWallet ${MiniWallet})
-add_executable(PaymentGateService ${PaymentGateService})
-add_executable(Miner ${Miner})
-
-if (MSVC)
-  target_link_libraries(System ws2_32)
-  target_link_libraries(Daemon Rpcrt4)
-  target_link_libraries(PaymentGateService Rpcrt4)
+if (WIN32 OR STATIC)
+  add_definitions(-DSTATICLIB)
+  # miniupnp changed their static define
+  add_definitions(-DMINIUPNP_STATICLIB)
 endif ()
 
-target_link_libraries(CryptoNoteCore Common Crypto Logging Serialization)
-target_link_libraries(P2P CryptoNoteCore Logging ${Boost_LIBRARIES} upnpc-static)
-target_link_libraries(Rpc CryptoNoteCore Logging P2P)
+# warnings are cleared only for GCC on Linux
+if (NOT (MINGW OR APPLE OR FREEBSD OR OPENBSD OR DRAGONFLY))
+  add_compile_options("${WARNINGS_AS_ERRORS_FLAG}") # applies only to targets that follow
+endif()
 
-target_link_libraries(ConnectivityTool CryptoNoteCore Common Logging Crypto P2P Rpc Http Serialization System ${Boost_LIBRARIES})
-target_link_libraries(Daemon P2P Rpc Serialization System Http Logging CryptoNoteCore Crypto Common upnpc-static rocksdblib ${Boost_LIBRARIES} )
-target_link_libraries(SimpleWallet Wallet NodeRpcProxy Transfers Rpc P2P upnpc-static Http Serialization CryptoNoteCore System Logging Common Crypto ${Boost_LIBRARIES})
-target_link_libraries(MiniWallet Wallet NodeRpcProxy Transfers Rpc P2P upnpc-static Http Serialization CryptoNoteCore System Logging Common Crypto ${Boost_LIBRARIES})
-target_link_libraries(PaymentGateService PaymentGate JsonRpcServer Wallet NodeRpcProxy Transfers P2P CryptoNoteCore Crypto Rpc Http Serialization System Logging Common InProcessNode upnpc-static BlockchainExplorer rocksdblib ${Boost_LIBRARIES})
-target_link_libraries(Miner CryptoNoteCore Rpc Serialization System Http Logging Common Crypto ${Boost_LIBRARIES})
+function (monero_private_headers group)
+  source_group("${group}\\Private"
+    FILES
+      ${ARGN})
+endfunction ()
 
-add_dependencies(Rpc version)
+function (monero_install_headers subdir)
+  install(
+    FILES       ${ARGN}
+    DESTINATION "include/${subdir}"
+    COMPONENT   development)
+endfunction ()
 
-add_dependencies(ConnectivityTool version)
-add_dependencies(Daemon version)
-add_dependencies(SimpleWallet version)
-add_dependencies(MiniWallet version)
-add_dependencies(PaymentGateService version)
-add_dependencies(P2P version)
+function (enable_stack_trace target)
+  if(STACK_TRACE)
+    set_property(TARGET ${target}
+      APPEND PROPERTY COMPILE_DEFINITIONS "STACK_TRACE")
+    if (STATIC)
+      set_property(TARGET "${target}"
+        APPEND PROPERTY LINK_FLAGS "-Wl,--wrap=__cxa_throw")
+    endif()
+  endif()
+endfunction()
 
-set_property(TARGET ConnectivityTool PROPERTY OUTPUT_NAME "connectivity_tool")
-set_property(TARGET Daemon PROPERTY OUTPUT_NAME "leviarcoind")
-set_property(TARGET SimpleWallet PROPERTY OUTPUT_NAME "simplewallet")
-set_property(TARGET MiniWallet PROPERTY OUTPUT_NAME "miniwallet")
-set_property(TARGET PaymentGateService PROPERTY OUTPUT_NAME "walletd")
-set_property(TARGET Miner PROPERTY OUTPUT_NAME "miner")
+function (monero_add_executable name)
+  source_group("${name}"
+    FILES
+      ${ARGN})
+
+  add_executable("${name}"
+    ${ARGN})
+  target_link_libraries("${name}"
+    PRIVATE
+      ${EXTRA_LIBRARIES})
+  set_property(TARGET "${name}"
+    PROPERTY
+      FOLDER "prog")
+  set_property(TARGET "${name}"
+    PROPERTY
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+  enable_stack_trace("${name}")
+endfunction ()
+
+function (monero_add_library name)
+    monero_add_library_with_deps(NAME "${name}" SOURCES ${ARGN})
+endfunction()
+
+function (monero_add_library_with_deps)
+  cmake_parse_arguments(MONERO_ADD_LIBRARY "" "NAME" "DEPENDS;SOURCES" ${ARGN})
+  source_group("${MONERO_ADD_LIBRARY_NAME}" FILES ${MONERO_ADD_LIBRARY_SOURCES})
+
+  # Define a ("virtual") object library and an actual library that links those
+  # objects together. The virtual libraries can be arbitrarily combined to link
+  # any subset of objects into one library archive. This is used for releasing
+  # libwallet, which combines multiple components.
+  set(objlib obj_${MONERO_ADD_LIBRARY_NAME})
+  add_library(${objlib} OBJECT ${MONERO_ADD_LIBRARY_SOURCES})
+  add_library("${MONERO_ADD_LIBRARY_NAME}" $<TARGET_OBJECTS:${objlib}>)
+  if (MONERO_ADD_LIBRARY_DEPENDS)
+    add_dependencies(${objlib} ${MONERO_ADD_LIBRARY_DEPENDS})
+  endif()
+  set_property(TARGET "${MONERO_ADD_LIBRARY_NAME}" PROPERTY FOLDER "libs")
+  target_compile_definitions(${objlib}
+    PRIVATE $<TARGET_PROPERTY:${MONERO_ADD_LIBRARY_NAME},INTERFACE_COMPILE_DEFINITIONS>)
+endfunction ()
+
+include(Version)
+monero_add_library(version SOURCES ${CMAKE_BINARY_DIR}/version.cpp DEPENDS genversion)
+
+add_subdirectory(common)
+add_subdirectory(crypto)
+add_subdirectory(ringct)
+add_subdirectory(checkpoints)
+add_subdirectory(cryptonote_basic)
+add_subdirectory(cryptonote_core)
+add_subdirectory(multisig)
+if(NOT IOS)
+  add_subdirectory(blockchain_db)
+endif()
+add_subdirectory(mnemonics)
+if(NOT IOS)
+  add_subdirectory(rpc)
+  add_subdirectory(serialization)
+endif()
+add_subdirectory(wallet)
+if(NOT IOS)
+  add_subdirectory(p2p)
+endif()
+add_subdirectory(cryptonote_protocol)
+if(NOT IOS)
+  add_subdirectory(simplewallet)
+  add_subdirectory(gen_multisig)
+  add_subdirectory(daemonizer)
+  add_subdirectory(daemon)
+  add_subdirectory(blockchain_utilities)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL Debug)
+  add_subdirectory(debug_utilities)
+endif()
+
+if(PER_BLOCK_CHECKPOINT)
+  add_subdirectory(blocks)
+endif()
+
+add_subdirectory(device)
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
+
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")

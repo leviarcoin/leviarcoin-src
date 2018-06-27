@@ -1,19 +1,32 @@
-// Copyright (c) 2012-2017, The CryptoNote developers, The Bytecoin developers
-//
-// This file is part of Bytecoin.
-//
-// Bytecoin is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// Bytecoin is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with Bytecoin.  If not, see <http://www.gnu.org/licenses/>.
+// Copyright (c) 2014-2018, The Monero Project
+// 
+// All rights reserved.
+// 
+// Redistribution and use in source and binary forms, with or without modification, are
+// permitted provided that the following conditions are met:
+// 
+// 1. Redistributions of source code must retain the above copyright notice, this list of
+//    conditions and the following disclaimer.
+// 
+// 2. Redistributions in binary form must reproduce the above copyright notice, this list
+//    of conditions and the following disclaimer in the documentation and/or other
+//    materials provided with the distribution.
+// 
+// 3. Neither the name of the copyright holder nor the names of its contributors may be
+//    used to endorse or promote products derived from this software without specific
+//    prior written permission.
+// 
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+// MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+// THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+// STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+// THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+// 
+// Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <cstddef>
 #include <cstring>
@@ -21,25 +34,29 @@
 #include <string>
 #include <vector>
 
+#include "warnings.h"
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include "crypto-tests.h"
-#include "../Io.h"
+#include "../io.h"
 
 using namespace std;
-typedef Crypto::Hash chash;
+using namespace crypto;
+typedef crypto::hash chash;
 
-bool operator !=(const Crypto::EllipticCurveScalar &a, const Crypto::EllipticCurveScalar &b) {
-  return 0 != memcmp(&a, &b, sizeof(Crypto::EllipticCurveScalar));
+bool operator !=(const ec_scalar &a, const ec_scalar &b) {
+  return 0 != memcmp(&a, &b, sizeof(ec_scalar));
 }
 
-bool operator !=(const Crypto::EllipticCurvePoint &a, const Crypto::EllipticCurvePoint &b) {
-  return 0 != memcmp(&a, &b, sizeof(Crypto::EllipticCurvePoint));
+bool operator !=(const ec_point &a, const ec_point &b) {
+  return 0 != memcmp(&a, &b, sizeof(ec_point));
 }
 
-bool operator !=(const Crypto::KeyDerivation &a, const Crypto::KeyDerivation &b) {
-  return 0 != memcmp(&a, &b, sizeof(Crypto::KeyDerivation));
+bool operator !=(const key_derivation &a, const key_derivation &b) {
+  return 0 != memcmp(&a, &b, sizeof(key_derivation));
 }
+
+DISABLE_GCC_WARNING(maybe-uninitialized)
 
 int main(int argc, char *argv[]) {
   fstream input;
@@ -60,7 +77,7 @@ int main(int argc, char *argv[]) {
     }
     input.exceptions(ios_base::badbit | ios_base::failbit | ios_base::eofbit);
     if (cmd == "check_scalar") {
-      Crypto::EllipticCurveScalar scalar;
+      ec_scalar scalar;
       bool expected, actual;
       get(input, scalar, expected);
       actual = check_scalar(scalar);
@@ -68,7 +85,7 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else if (cmd == "random_scalar") {
-      Crypto::EllipticCurveScalar expected, actual;
+      ec_scalar expected, actual;
       get(input, expected);
       random_scalar(actual);
       if (expected != actual) {
@@ -76,22 +93,22 @@ int main(int argc, char *argv[]) {
       }
     } else if (cmd == "hash_to_scalar") {
       vector<char> data;
-      Crypto::EllipticCurveScalar expected, actual;
+      ec_scalar expected, actual;
       get(input, data, expected);
-      hash_to_scalar(data.data(), data.size(), actual);
+      crypto::hash_to_scalar(data.data(), data.size(), actual);
       if (expected != actual) {
         goto error;
       }
     } else if (cmd == "generate_keys") {
-      Crypto::PublicKey expected1, actual1;
-      Crypto::SecretKey expected2, actual2;
+      public_key expected1, actual1;
+      secret_key expected2, actual2;
       get(input, expected1, expected2);
       generate_keys(actual1, actual2);
       if (expected1 != actual1 || expected2 != actual2) {
         goto error;
       }
     } else if (cmd == "check_key") {
-      Crypto::PublicKey key;
+      public_key key;
       bool expected, actual;
       get(input, key, expected);
       actual = check_key(key);
@@ -99,9 +116,9 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else if (cmd == "secret_key_to_public_key") {
-      Crypto::SecretKey sec;
+      secret_key sec;
       bool expected1, actual1;
-      Crypto::PublicKey expected2, actual2;
+      public_key expected2, actual2;
       get(input, sec, expected1);
       if (expected1) {
         get(input, expected2);
@@ -111,10 +128,10 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else if (cmd == "generate_key_derivation") {
-      Crypto::PublicKey key1;
-      Crypto::SecretKey key2;
+      public_key key1;
+      secret_key key2;
       bool expected1, actual1;
-      Crypto::KeyDerivation expected2, actual2;
+      key_derivation expected2, actual2;
       get(input, key1, key2, expected1);
       if (expected1) {
         get(input, expected2);
@@ -124,11 +141,11 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else if (cmd == "derive_public_key") {
-      Crypto::KeyDerivation derivation;
+      key_derivation derivation;
       size_t output_index;
-      Crypto::PublicKey base;
+      public_key base;
       bool expected1, actual1;
-      Crypto::PublicKey expected2, actual2;
+      public_key expected2, actual2;
       get(input, derivation, output_index, base, expected1);
       if (expected1) {
         get(input, expected2);
@@ -138,34 +155,20 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else if (cmd == "derive_secret_key") {
-      Crypto::KeyDerivation derivation;
+      key_derivation derivation;
       size_t output_index;
-      Crypto::SecretKey base;
-      Crypto::SecretKey expected, actual;
+      secret_key base;
+      secret_key expected, actual;
       get(input, derivation, output_index, base, expected);
       derive_secret_key(derivation, output_index, base, actual);
       if (expected != actual) {
         goto error;
       }
-    } else if (cmd == "underive_public_key") {
-      Crypto::KeyDerivation derivation;
-      size_t output_index;
-      Crypto::PublicKey derived_key;
-      bool expected1, actual1;
-      Crypto::PublicKey expected2, actual2;
-      get(input, derivation, output_index, derived_key, expected1);
-      if (expected1) {
-        get(input, expected2);
-      }
-      actual1 = underive_public_key(derivation, output_index, derived_key, actual2);
-      if (expected1 != actual1 || (expected1 && expected2 != actual2)) {
-        goto error;
-      }
     } else if (cmd == "generate_signature") {
       chash prefix_hash;
-      Crypto::PublicKey pub;
-      Crypto::SecretKey sec;
-      Crypto::Signature expected, actual;
+      public_key pub;
+      secret_key sec;
+      signature expected, actual;
       get(input, prefix_hash, pub, sec, expected);
       generate_signature(prefix_hash, pub, sec, actual);
       if (expected != actual) {
@@ -173,8 +176,8 @@ int main(int argc, char *argv[]) {
       }
     } else if (cmd == "check_signature") {
       chash prefix_hash;
-      Crypto::PublicKey pub;
-      Crypto::Signature sig;
+      public_key pub;
+      signature sig;
       bool expected, actual;
       get(input, prefix_hash, pub, sig, expected);
       actual = check_signature(prefix_hash, pub, sig);
@@ -183,24 +186,24 @@ int main(int argc, char *argv[]) {
       }
     } else if (cmd == "hash_to_point") {
       chash h;
-      Crypto::EllipticCurvePoint expected, actual;
+      ec_point expected, actual;
       get(input, h, expected);
       hash_to_point(h, actual);
       if (expected != actual) {
         goto error;
       }
     } else if (cmd == "hash_to_ec") {
-      Crypto::PublicKey key;
-      Crypto::EllipticCurvePoint expected, actual;
+      public_key key;
+      ec_point expected, actual;
       get(input, key, expected);
       hash_to_ec(key, actual);
       if (expected != actual) {
         goto error;
       }
     } else if (cmd == "generate_key_image") {
-      Crypto::PublicKey pub;
-      Crypto::SecretKey sec;
-      Crypto::KeyImage expected, actual;
+      public_key pub;
+      secret_key sec;
+      key_image expected, actual;
       get(input, pub, sec, expected);
       generate_key_image(pub, sec, actual);
       if (expected != actual) {
@@ -208,13 +211,13 @@ int main(int argc, char *argv[]) {
       }
     } else if (cmd == "generate_ring_signature") {
       chash prefix_hash;
-      Crypto::KeyImage image;
-      vector<Crypto::PublicKey> vpubs;
-      vector<const Crypto::PublicKey *> pubs;
+      key_image image;
+      vector<public_key> vpubs;
+      vector<const public_key *> pubs;
       size_t pubs_count;
-      Crypto::SecretKey sec;
+      secret_key sec;
       size_t sec_index;
-      vector<Crypto::Signature> expected, actual;
+      vector<signature> expected, actual;
       size_t i;
       get(input, prefix_hash, image, pubs_count);
       vpubs.resize(pubs_count);
@@ -225,7 +228,7 @@ int main(int argc, char *argv[]) {
       }
       get(input, sec, sec_index);
       expected.resize(pubs_count);
-      getvar(input, pubs_count * sizeof(Crypto::Signature), expected.data());
+      getvar(input, pubs_count * sizeof(signature), expected.data());
       actual.resize(pubs_count);
       generate_ring_signature(prefix_hash, image, pubs.data(), pubs_count, sec, sec_index, actual.data());
       if (expected != actual) {
@@ -233,11 +236,11 @@ int main(int argc, char *argv[]) {
       }
     } else if (cmd == "check_ring_signature") {
       chash prefix_hash;
-      Crypto::KeyImage image;
-      vector<Crypto::PublicKey> vpubs;
-      vector<const Crypto::PublicKey *> pubs;
+      key_image image;
+      vector<public_key> vpubs;
+      vector<const public_key *> pubs;
       size_t pubs_count;
-      vector<Crypto::Signature> sigs;
+      vector<signature> sigs;
       bool expected, actual;
       size_t i;
       get(input, prefix_hash, image, pubs_count);
@@ -248,9 +251,9 @@ int main(int argc, char *argv[]) {
         pubs[i] = &vpubs[i];
       }
       sigs.resize(pubs_count);
-      getvar(input, pubs_count * sizeof(Crypto::Signature), sigs.data());
+      getvar(input, pubs_count * sizeof(signature), sigs.data());
       get(input, expected);
-      actual = check_ring_signature(prefix_hash, image, pubs.data(), pubs_count, sigs.data(), true);
+      actual = check_ring_signature(prefix_hash, image, pubs.data(), pubs_count, sigs.data());
       if (expected != actual) {
         goto error;
       }

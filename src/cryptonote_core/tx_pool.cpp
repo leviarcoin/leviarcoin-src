@@ -1092,6 +1092,11 @@ namespace cryptonote
 
     size_t max_total_size_v5 = 2 * median_size - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
     size_t max_total_size = version >= 5 ? max_total_size_v5 : max_total_size_pre_v5;
+
+    if (next_height >= UPGRADE_HEIGHT_V4) {
+	max_total_size = max_total_size_pre_v5;
+    }
+	  
     std::unordered_set<crypto::key_image> k_images;
 
     LOG_PRINT_L2("Filling block template, median size " << median_size << ", " << m_txs_by_fee_and_receive_time.size() << " txes in the pool");

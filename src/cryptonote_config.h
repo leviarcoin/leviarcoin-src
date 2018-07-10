@@ -60,6 +60,7 @@
 #define UPGRADE_HEIGHT_V1                                     uint32_t(250000)
 #define UPGRADE_HEIGHT_V2                                     uint32_t(325000)
 #define UPGRADE_HEIGHT_V3                                     uint32_t(337000)
+#define UPGRADE_HEIGHT_V4                                     uint32_t(493500)
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                       size_t(100)
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE             size_t(1000000) //size of block (bytes) after which reward for block calculated using block size
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1          size_t(20000)

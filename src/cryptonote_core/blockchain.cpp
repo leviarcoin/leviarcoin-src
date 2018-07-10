@@ -724,8 +724,8 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
   std::vector<uint64_t> timestamps;
   std::vector<difficulty_type> difficulties;
   auto height = m_db->height();
-  if(height>600) {
-      LOG_PRINT_L3("At height > 617");
+  if(height > 491538 && height < 493500) { // hot fix diff for network stuck after fork
+      return 120000;
   }
   // ND: Speedup
   // 1. Keep a list of the last 735 (or less) blocks that is used to compute difficulty,

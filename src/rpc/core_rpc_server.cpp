@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-//
+// 
 // All rights reserved.
-//
+// 
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-//
+// 
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-//
+// 
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-//
+// 
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-//
+// 
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+// 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "include_base_utils.h"
@@ -47,6 +47,7 @@ using namespace epee;
 #include "rpc/rpc_args.h"
 #include "core_rpc_server_error_codes.h"
 #include "p2p/net_node.h"
+#include "get_output_distribution_cache.h"
 #include "version.h"
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
@@ -892,7 +893,7 @@ namespace cryptonote
     const miner& lMiner = m_core.get_miner();
     res.active = lMiner.is_mining();
     res.is_background_mining_enabled = lMiner.get_is_background_mining_enabled();
-
+    
     if ( lMiner.is_mining() ) {
       res.speed = lMiner.get_speed();
       res.threads_count = lMiner.get_threads_count();
@@ -1141,7 +1142,7 @@ namespace cryptonote
     {
       error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
       error_resp.message = "Internal error: failed to create block template";
-      LOG_ERROR("Failed to find tx pub key in coinbase extra");
+      LOG_ERROR("Failed to  tx pub key in coinbase extra");
       return false;
     }
     res.reserved_offset = slow_memmem((void*)block_blob.data(), block_blob.size(), &tx_pub_key, sizeof(tx_pub_key));
@@ -1193,7 +1194,7 @@ namespace cryptonote
       error_resp.message = "Wrong block blob";
       return false;
     }
-
+    
     // Fixing of high orphan issue for most pools
     // Thanks Boolberry!
     block b = AUTO_VAL_INIT(b);
@@ -1564,7 +1565,7 @@ namespace cryptonote
     res.top_block_hash = string_tools::pod_to_hex(top_hash);
     res.target_height = m_core.get_target_blockchain_height();
     res.difficulty = m_core.get_blockchain_storage().get_difficulty_for_next_block();
-    res.target = DIFFICULTY_TARGET;
+    res.target = m_core.get_blockchain_storage().get_current_hard_fork_version() < 2 ? DIFFICULTY_TARGET_V1 : DIFFICULTY_TARGET_V2;
     res.tx_count = m_core.get_blockchain_storage().get_total_transactions() - res.height; //without coinbase
     res.tx_pool_size = m_core.get_pool_transactions_count();
     res.alt_blocks_count = m_core.get_blockchain_storage().get_alternative_blocks_count();
@@ -1728,7 +1729,7 @@ namespace cryptonote
     std::map<uint64_t, std::tuple<uint64_t, uint64_t, uint64_t>> histogram;
     try
     {
-      histogram = m_core.get_blockchain_storage().get_output_histogram(req.amounts, req.unlocked, req.recent_cutoff);
+      histogram = m_core.get_blockchain_storage().get_output_histogram(req.amounts, req.unlocked, req.recent_cutoff, req.min_count);
     }
     catch (const std::exception &e)
     {
@@ -2082,24 +2083,87 @@ namespace cryptonote
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_output_distribution(const COMMAND_RPC_GET_OUTPUT_DISTRIBUTION::request& req, COMMAND_RPC_GET_OUTPUT_DISTRIBUTION::response& res, epee::json_rpc::error& error_resp)
   {
+    PERF_TIMER(on_get_output_distribution);
     try
     {
       for (uint64_t amount: req.amounts)
       {
+        static struct D
+        {
+          boost::mutex mutex;
+          std::vector<uint64_t> cached_distribution;
+          uint64_t cached_from, cached_to, cached_start_height, cached_base;
+          bool cached;
+          D(): cached_from(0), cached_to(0), cached_start_height(0), cached_base(0), cached(false) {}
+        } d;
+        boost::unique_lock<boost::mutex> lock(d.mutex);
+
+        if (d.cached && amount == 0 && d.cached_from == req.from_height && d.cached_to == req.to_height)
+        {
+          res.distributions.push_back({amount, d.cached_start_height, d.cached_distribution, d.cached_base});
+          if (req.cumulative)
+          {
+            auto &distribution = res.distributions.back().distribution;
+            distribution[0] += d.cached_base;
+            for (size_t n = 1; n < distribution.size(); ++n)
+              distribution[n] += distribution[n-1];
+          }
+          continue;
+        }
+
+        // this is a slow operation, so we have precomputed caches of common cases
+        bool found = false;
+        for (const auto &slot: get_output_distribution_cache)
+        {
+          if (slot.amount == amount && slot.from_height == req.from_height && slot.to_height == req.to_height)
+          {
+            res.distributions.push_back({amount, slot.start_height, slot.distribution, slot.base});
+            found = true;
+            if (req.cumulative)
+            {
+              auto &distribution = res.distributions.back().distribution;
+              distribution[0] += slot.base;
+              for (size_t n = 1; n < distribution.size(); ++n)
+                distribution[n] += distribution[n-1];
+            }
+            break;
+          }
+        }
+        if (found)
+          continue;
+
         std::vector<uint64_t> distribution;
         uint64_t start_height, base;
-        if (!m_core.get_output_distribution(amount, req.from_height, start_height, distribution, base))
+        if (!m_core.get_output_distribution(amount, req.from_height, req.to_height, start_height, distribution, base))
         {
           error_resp.code = CORE_RPC_ERROR_CODE_INTERNAL_ERROR;
           error_resp.message = "Failed to get rct distribution";
           return false;
         }
+        if (req.to_height > 0 && req.to_height >= req.from_height)
+        {
+          uint64_t offset = std::max(req.from_height, start_height);
+          if (offset <= req.to_height && req.to_height - offset + 1 < distribution.size())
+            distribution.resize(req.to_height - offset + 1);
+        }
+
+        if (amount == 0)
+        {
+          d.cached_from = req.from_height;
+          d.cached_to = req.to_height;
+          d.cached_distribution = distribution;
+          d.cached_start_height = start_height;
+          d.cached_base = base;
+          d.cached = true;
+        }
+
         if (req.cumulative)
         {
           distribution[0] += base;
           for (size_t n = 1; n < distribution.size(); ++n)
             distribution[n] += distribution[n-1];
         }
+
         res.distributions.push_back({amount, start_height, std::move(distribution), base});
       }
     }

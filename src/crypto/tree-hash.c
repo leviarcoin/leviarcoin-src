@@ -67,6 +67,10 @@ size_t tree_hash_cnt(size_t count) {
 }
 
 void tree_hash(const char (*hashes)[HASH_SIZE], size_t count, char *root_hash) {
+// The blockchain block at height 202612 http://monerochain.info/block/bbd604d2ba11ba27935e006ed39c9bfdd99b76bf4a50654bc1e1e61217962698
+// contained 514 transactions, that triggered bad calculation of variable "cnt" in the original version of this function
+// as from CryptoNote code.
+//
 // This bug applies to all CN altcoins.
 //
 // Mathematical bug here was first published on 14:45:34 (GMT+2) 2014-09-04 by Rafal Freeman <rfree>

@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-//
+// 
 // All rights reserved.
-//
+// 
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-//
+// 
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-//
+// 
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-//
+// 
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-//
+// 
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,12 +25,12 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+// 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 /*!
  * \file simplewallet.cpp
- *
+ * 
  * \brief Source file that defines simple_wallet class.
  */
 #include <thread>
@@ -62,6 +62,7 @@
 #include "ringct/rctSigs.h"
 #include "multisig/multisig.h"
 #include "wallet/wallet_args.h"
+#include "version.h"
 #include <stdexcept>
 
 #ifdef WIN32
@@ -130,9 +131,10 @@ namespace
   const command_line::arg_descriptor<bool> arg_restore_multisig_wallet = {"restore-multisig-wallet", sw::tr("Recover multisig wallet using Electrum-style mnemonic seed"), false};
   const command_line::arg_descriptor<bool> arg_non_deterministic = {"non-deterministic", sw::tr("Generate non-deterministic view and spend keys"), false};
   const command_line::arg_descriptor<bool> arg_trusted_daemon = {"trusted-daemon", sw::tr("Enable commands which rely on a trusted daemon"), false};
+  const command_line::arg_descriptor<bool> arg_untrusted_daemon = {"untrusted-daemon", sw::tr("Disable commands which rely on a trusted daemon"), false};
   const command_line::arg_descriptor<bool> arg_allow_mismatched_daemon_version = {"allow-mismatched-daemon-version", sw::tr("Allow communicating with a daemon that uses a different RPC version"), false};
   const command_line::arg_descriptor<uint64_t> arg_restore_height = {"restore-height", sw::tr("Restore from specific blockchain height"), 0};
-  const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the monero network"), false};
+  const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the leviar network"), false};
   const command_line::arg_descriptor<bool> arg_create_address_file = {"create-address-file", sw::tr("Create an address file for new wallets"), false};
   const command_line::arg_descriptor<std::string> arg_subaddress_lookahead = {"subaddress-lookahead", tools::wallet2::tr("Set subaddress lookahead sizes to <major>:<minor>"), ""};
   const command_line::arg_descriptor<bool> arg_use_english_language_names = {"use-english-language-names", sw::tr("Display English language names"), false};
@@ -379,21 +381,10 @@ namespace
 
   boost::optional<std::pair<uint32_t, uint32_t>> parse_subaddress_lookahead(const std::string& str)
   {
-    auto pos = str.find(":");
-    bool r = pos != std::string::npos;
-    uint32_t major;
-    r = r && epee::string_tools::get_xtype_from_string(major, str.substr(0, pos));
-    uint32_t minor;
-    r = r && epee::string_tools::get_xtype_from_string(minor, str.substr(pos + 1));
-    if (r)
-    {
-      return std::make_pair(major, minor);
-    }
-    else
-    {
+    auto r = tools::parse_subaddress_lookahead(str);
+    if (!r)
       fail_msg_writer() << tr("invalid format for subaddress lookahead; must be <major>:<minor>");
-      return {};
-    }
+    return r;
   }
 
   void handle_transfer_exception(const std::exception_ptr &e, bool trusted_daemon)
@@ -650,7 +641,7 @@ bool simple_wallet::print_seed(bool encrypted)
   else if (m_wallet->is_deterministic())
     success = m_wallet->get_seed(seed, seed_pass);
 
-  if (success)
+  if (success) 
   {
     print_seed(seed);
   }
@@ -693,7 +684,7 @@ bool simple_wallet::seed_set_language(const std::vector<std::string> &args/* = s
     fail_msg_writer() << tr("wallet is non-deterministic and has no seed");
     return true;
   }
-
+ 
   const auto pwd_container = get_and_verify_password();
   if (pwd_container)
   {
@@ -708,7 +699,7 @@ bool simple_wallet::seed_set_language(const std::vector<std::string> &args/* = s
 }
 
 bool simple_wallet::change_password(const std::vector<std::string> &args)
-{
+{ 
   const auto orig_pwd_container = get_and_verify_password();
 
   if(orig_pwd_container == boost::none)
@@ -758,7 +749,7 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
   }
   const uint64_t per_kb_fee = m_wallet->get_per_kb_fee();
   const uint64_t typical_size_kb = 13;
-  message_writer() << (boost::format(tr("Current fee is %s XLC per kB")) % print_money(per_kb_fee)).str();
+  message_writer() << (boost::format(tr("Current fee is %s %s per kB")) % print_money(per_kb_fee) % cryptonote::get_unit(cryptonote::get_default_decimal_point())).str();
 
   std::vector<uint64_t> fees;
   for (uint32_t priority = 1; priority <= 4; ++priority)
@@ -792,7 +783,7 @@ bool simple_wallet::print_fee_info(const std::vector<std::string> &args/* = std:
       std::string msg;
       if (priority == m_wallet->get_default_priority() || (m_wallet->get_default_priority() == 0 && priority == 2))
         msg = tr(" (current)");
-      uint64_t minutes_low = nblocks_low * DIFFICULTY_TARGET / 60, minutes_high = nblocks_high * DIFFICULTY_TARGET / 60;
+      uint64_t minutes_low = nblocks_low * DIFFICULTY_TARGET_V2 / 60, minutes_high = nblocks_high * DIFFICULTY_TARGET_V2 / 60;
       if (nblocks_high == nblocks_low)
         message_writer() << (boost::format(tr("%u block (%u minutes) backlog at priority %u%s")) % nblocks_low % minutes_low % priority % msg).str();
       else
@@ -1076,7 +1067,7 @@ bool simple_wallet::import_multisig(const std::vector<std::string> &args)
     fail_msg_writer() << tr("Failed to import multisig info: ") << e.what();
     return true;
   }
-  if (m_trusted_daemon)
+  if (is_daemon_trusted())
   {
     try
     {
@@ -1228,7 +1219,7 @@ bool simple_wallet::submit_multisig(const std::vector<std::string> &args)
   }
   catch (const std::exception &e)
   {
-    handle_transfer_exception(std::current_exception(), m_trusted_daemon);
+    handle_transfer_exception(std::current_exception(), is_daemon_trusted());
   }
   catch (...)
   {
@@ -1584,6 +1575,12 @@ bool simple_wallet::save_known_rings(const std::vector<std::string> &args)
   return true;
 }
 
+bool simple_wallet::version(const std::vector<std::string> &args)
+{
+  message_writer() << "Leviar '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")";
+  return true;
+}
+
 bool simple_wallet::set_always_confirm_transfers(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
 {
   const auto pwd_container = get_and_verify_password();
@@ -1617,7 +1614,7 @@ bool simple_wallet::set_store_tx_info(const std::vector<std::string> &args/* = s
     fail_msg_writer() << tr("wallet is watch-only and cannot transfer");
     return true;
   }
-
+ 
   const auto pwd_container = get_and_verify_password();
   if (pwd_container)
   {
@@ -1649,7 +1646,7 @@ bool simple_wallet::set_default_ring_size(const std::vector<std::string> &args/*
       fail_msg_writer() << tr("ring size must be an integer >= ") << MIN_RING_SIZE;
       return true;
     }
-
+ 
     if (ring_size != 0 && ring_size != DEFAULT_MIX+1)
       message_writer() << tr("WARNING: this is a non default ring size, which may harm your privacy. Default is recommended.");
 
@@ -1696,7 +1693,7 @@ bool simple_wallet::set_default_priority(const std::vector<std::string> &args/* 
         return true;
       }
     }
-
+ 
     const auto pwd_container = get_and_verify_password();
     if (pwd_container)
     {
@@ -1742,7 +1739,7 @@ bool simple_wallet::set_refresh_type(const std::vector<std::string> &args/* = st
   {
     return true;
   }
-
+ 
   const auto pwd_container = get_and_verify_password();
   if (pwd_container)
   {
@@ -1782,16 +1779,16 @@ bool simple_wallet::set_unit(const std::vector<std::string> &args/* = std::vecto
 {
   const std::string &unit = args[1];
   unsigned int decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-  //TOOD leviar
-  if (unit == "monero")
+
+  if (unit == "leviar")
     decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
-  else if (unit == "millinero")
+  else if (unit == "millileviar")
     decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 3;
-  else if (unit == "micronero")
+  else if (unit == "microleviar")
     decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 6;
-  else if (unit == "nanonero")
-    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 9;
-  else if (unit == "piconero")
+  else if (unit == "nanoleviar")
+    decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 7;
+  else if (unit == "picoleviar")
     decimal_point = 0;
   else
   {
@@ -2020,7 +2017,7 @@ simple_wallet::simple_wallet()
                            tr("Stop mining in the daemon."));
   m_cmd_binder.set_handler("set_daemon",
                            boost::bind(&simple_wallet::set_daemon, this, _1),
-                           tr("set_daemon <host>[:<port>]"),
+                           tr("set_daemon <host>[:<port>] [trusted|untrusted]"),
                            tr("Set another daemon to connect to."));
   m_cmd_binder.set_handler("save_bc",
                            boost::bind(&simple_wallet::save_bc, this, _1),
@@ -2068,14 +2065,10 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::sweep_single, this, _1),
                            tr("sweep_single [<priority>] [<ring_size>] <key_image> <address> [<payment_id>]"),
                            tr("Send a single output of the given key image to an address without change."));
-  m_cmd_binder.set_handler("donate",
-                           boost::bind(&simple_wallet::donate, this, _1),
-                           tr("donate [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <amount> [<payment_id>]"),
-                           tr("Donate <amount> to the development team (donate.getmonero.org)."));
   m_cmd_binder.set_handler("sign_transfer",
                            boost::bind(&simple_wallet::sign_transfer, this, _1),
-                           tr("sign_transfer <file>"),
-                           tr("Sign a transaction from a <file>."));
+                           tr("sign_transfer [export]"),
+                           tr("Sign a transaction from a file."));
   m_cmd_binder.set_handler("submit_transfer",
                            boost::bind(&simple_wallet::submit_transfer, this, _1),
                            tr("Submit a signed transaction from a file."));
@@ -2148,8 +2141,8 @@ simple_wallet::simple_wallet()
                                   "  Set the fee too default/unimportant/normal/elevated/priority.\n "
                                   "confirm-missing-payment-id <1|0>\n "
                                   "ask-password <1|0>\n "
-                                  "unit <monero|millinero|micronero|nanonero|piconero>\n "
-                                  "  Set the default monero (sub-)unit.\n "
+                                  "unit <leviar|millileviar|microleviar|nanoleviar|picoleviar>\n "
+                                  "  Set the default leviar (sub-)unit.\n "
                                   "min-outputs-count [n]\n "
                                   "  Try to keep at least that many outputs of value at least min-outputs-value.\n "
                                   "min-outputs-value [n]\n "
@@ -2165,12 +2158,12 @@ simple_wallet::simple_wallet()
                                   "auto-low-priority <1|0>\n "
                                   "  Whether to automatically use the low priority fee level when it's safe to do so.\n "
                                   "segregate-pre-fork-outputs <1|0>\n "
-                                  "  Set this if you intend to spend outputs on both Monero AND a key reusing fork.\n "
+                                  "  Set this if you intend to spend outputs on both Leviar AND a key reusing fork.\n "
                                   "key-reuse-mitigation2 <1|0>\n "
-                                  "  Set this if you are not sure whether you will spend on a key reusing Monero fork later.\n"
+                                  "  Set this if you are not sure whether you will spend on a key reusing Leviar fork later.\n"
                                   "subaddress-lookahead <major>:<minor>\n "
                                   "  Set the lookahead sizes for the subaddress hash table.\n "
-                                  "  Set this if you are not sure whether you will spend on a key reusing Monero fork later.\n "
+                                  "  Set this if you are not sure whether you will spend on a key reusing Leviar fork later.\n "
                                   "segregation-height <n>\n "
                                   "  Set to the height of a key reusing fork you want to use, 0 to use default."));
   m_cmd_binder.set_handler("encrypted_seed",
@@ -2335,6 +2328,10 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::blackballed, this, _1),
                            tr("blackballed <output public key>"),
                            tr("Checks whether an output is blackballed"));
+  m_cmd_binder.set_handler("version",
+                           boost::bind(&simple_wallet::version, this, _1),
+                           tr("version"),
+                           tr("Returns version information"));
   m_cmd_binder.set_handler("help",
                            boost::bind(&simple_wallet::help, this, _1),
                            tr("help [<command>]"),
@@ -2413,8 +2410,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("priority", set_default_priority, tr("0, 1, 2, 3, or 4"));
     CHECK_SIMPLE_VARIABLE("confirm-missing-payment-id", set_confirm_missing_payment_id, tr("0 or 1"));
     CHECK_SIMPLE_VARIABLE("ask-password", set_ask_password, tr("0 or 1"));
-    // TODO leviar:
-    CHECK_SIMPLE_VARIABLE("unit", set_unit, tr("monero, millinero, micronero, nanonero, piconero"));
+    CHECK_SIMPLE_VARIABLE("unit", set_unit, tr("leviar, millileviar, microleviar, nanoleviar, picoleviar"));
     CHECK_SIMPLE_VARIABLE("min-outputs-count", set_min_output_count, tr("unsigned integer"));
     CHECK_SIMPLE_VARIABLE("min-outputs-value", set_min_output_value, tr("amount"));
     CHECK_SIMPLE_VARIABLE("merge-destinations", set_merge_destinations, tr("0 or 1"));
@@ -2446,7 +2442,7 @@ bool simple_wallet::set_log(const std::vector<std::string> &args)
   return true;
 }
 //----------------------------------------------------------------------------------------------------
-bool simple_wallet::ask_wallet_create_if_needed(const boost::program_options::variables_map& vm)
+bool simple_wallet::ask_wallet_create_if_needed()
 {
   LOG_PRINT_L3("simple_wallet::ask_wallet_create_if_needed() started");
   std::string wallet_path;
@@ -2499,15 +2495,8 @@ bool simple_wallet::ask_wallet_create_if_needed(const boost::program_options::va
         }
         else if(wallet_file_exists && !keys_file_exists) //Yes wallet, no keys
         {
-          fail_msg_writer() << tr("Key file not found. Maybe importing from v1? Trying to open v1 wallet file");
-
-          // TODO leviar - set here, maybe is a v1 wallet
-          m_wallet_file = wallet_path;
-          auto r = tools::wallet2::convert_from_v1(vm, m_wallet_file, password_prompter);
-
           fail_msg_writer() << tr("Key file not found. Failed to open wallet: ") << "\"" << wallet_path << "\". Exiting.";
-          //return false;
-          return true;
+          return false;
         }
         else if(!wallet_file_exists && !keys_file_exists) //No wallet, no keys
         {
@@ -2584,7 +2573,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
   }
   else if (m_generate_new.empty() && m_wallet_file.empty() && m_generate_from_device.empty() && m_generate_from_view_key.empty() && m_generate_from_spend_key.empty() && m_generate_from_keys.empty() && m_generate_from_multisig_keys.empty() && m_generate_from_json.empty())
   {
-    if(!ask_wallet_create_if_needed(vm)) return false;
+    if(!ask_wallet_create_if_needed()) return false;
   }
 
   if (!m_generate_new.empty() || m_restoring)
@@ -2829,14 +2818,14 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
       bool r = new_wallet(vm, info.address, spendkey, viewkey);
       CHECK_AND_ASSERT_MES(r, false, tr("account creation failed"));
     }
-
+    
     // Asks user for all the data required to merge secret keys from multisig wallets into one master wallet, which then gets full control of the multisig wallet. The resulting wallet will be the same as any other regular wallet.
     else if (!m_generate_from_multisig_keys.empty())
     {
       m_wallet_file = m_generate_from_multisig_keys;
       unsigned int multisig_m;
       unsigned int multisig_n;
-
+      
       // parse multisig type
       std::string multisig_type_string = input_line("Multisig type (input as M/N with M <= N and M > 1): ");
       if (std::cin.eof())
@@ -2860,9 +2849,9 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
       {
         fail_msg_writer() << tr("Error: M/N is currently unsupported. ");
         return false;
-      }
+      }      
       message_writer() << boost::format(tr("Generating master wallet from %u of %u multisig wallet keys")) % multisig_m % multisig_n;
-
+      
       // parse multisig address
       std::string address_string = input_line("Multisig wallet address: ");
       if (std::cin.eof())
@@ -2877,7 +2866,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
           fail_msg_writer() << tr("failed to parse address");
           return false;
       }
-
+      
       // parse secret view key
       std::string viewkey_string = input_line("Secret view key: ");
       if (std::cin.eof())
@@ -2894,7 +2883,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
         return false;
       }
       crypto::secret_key viewkey = *reinterpret_cast<const crypto::secret_key*>(viewkey_data.data());
-
+      
       // check that the view key matches the given address
       crypto::public_key pkey;
       if (!crypto::secret_key_to_public_key(viewkey, pkey))
@@ -2907,7 +2896,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
         fail_msg_writer() << tr("view key does not match standard address");
         return false;
       }
-
+      
       // parse multisig spend keys
       crypto::secret_key spendkey;
       // parsing N/N
@@ -2934,7 +2923,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
           }
           multisig_secret_spendkeys[i] = *reinterpret_cast<const crypto::secret_key*>(spendkey_data.data());
         }
-
+        
         // sum the spend keys together to get the master spend key
         spendkey = multisig_secret_spendkeys[0];
         for(unsigned int i=1; i<multisig_n; ++i)
@@ -2946,7 +2935,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
         fail_msg_writer() << tr("Error: M/N is currently unsupported");
         return false;
       }
-
+      
       // check that the spend key matches the given address
       if (!crypto::secret_key_to_public_key(spendkey, pkey))
       {
@@ -2958,12 +2947,12 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
         fail_msg_writer() << tr("spend key does not match standard address");
         return false;
       }
-
+      
       // create wallet
       bool r = new_wallet(vm, info.address, spendkey, viewkey);
       CHECK_AND_ASSERT_MES(r, false, tr("account creation failed"));
     }
-
+    
     else if (!m_generate_from_json.empty())
     {
       m_wallet_file = m_generate_from_json;
@@ -3114,18 +3103,22 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
     return false;
   }
 
-  // set --trusted-daemon if local
-  try
-  {
-    if (tools::is_local_address(m_wallet->get_daemon_address()))
-    {
-      MINFO(tr("Daemon is local, assuming trusted"));
-      m_trusted_daemon = true;
-    }
-  }
-  catch (const std::exception &e) { }
-
+  // set --trusted-daemon if local and not overridden
   if (!m_trusted_daemon)
+  {
+    try
+    {
+      m_trusted_daemon = false;
+      if (tools::is_local_address(m_wallet->get_daemon_address()))
+      {
+        MINFO(tr("Daemon is local, assuming trusted"));
+        m_trusted_daemon = true;
+      }
+    }
+    catch (const std::exception &e) { }
+  }
+
+  if (!is_daemon_trusted())
     message_writer() << (boost::format(tr("Warning: using an untrusted daemon at %s, privacy will be lessened")) % m_wallet->get_daemon_address()).str();
 
   if (m_wallet->get_ring_database().empty())
@@ -3159,7 +3152,10 @@ bool simple_wallet::handle_command_line(const boost::program_options::variables_
   m_restore_deterministic_wallet  = command_line::get_arg(vm, arg_restore_deterministic_wallet);
   m_restore_multisig_wallet       = command_line::get_arg(vm, arg_restore_multisig_wallet);
   m_non_deterministic             = command_line::get_arg(vm, arg_non_deterministic);
-  m_trusted_daemon                = command_line::get_arg(vm, arg_trusted_daemon);
+  if (!command_line::is_arg_defaulted(vm, arg_trusted_daemon) || !command_line::is_arg_defaulted(vm, arg_untrusted_daemon))
+    m_trusted_daemon = command_line::get_arg(vm, arg_trusted_daemon) && !command_line::get_arg(vm, arg_untrusted_daemon);
+  if (!command_line::is_arg_defaulted(vm, arg_trusted_daemon) && !command_line::is_arg_defaulted(vm, arg_untrusted_daemon))
+    message_writer() << tr("--trusted-daemon and --untrusted-daemon are both seen, assuming untrusted");
   m_allow_mismatched_daemon_version = command_line::get_arg(vm, arg_allow_mismatched_daemon_version);
   m_restore_height                = command_line::get_arg(vm, arg_restore_height);
   m_do_not_relay                  = command_line::get_arg(vm, arg_do_not_relay);
@@ -3201,9 +3197,9 @@ bool simple_wallet::try_connect_to_daemon(bool silent, uint32_t* version)
 
 /*!
  * \brief Gets the word seed language from the user.
- *
+ * 
  * User is asked to choose from a list of supported languages.
- *
+ * 
  * \return The chosen language.
  */
 std::string simple_wallet::get_mnemonic_language()
@@ -3332,7 +3328,7 @@ bool simple_wallet::new_wallet(const boost::program_options::variables_map& vm,
     "To start synchronizing with the daemon, use the \"refresh\" command.\n"
     "Use the \"help\" command to see the list of available commands.\n"
     "Use \"help <command>\" to see a command's documentation.\n"
-    "Always use the \"exit\" command when closing monero-wallet-cli to save \n"
+    "Always use the \"exit\" command when closing leviar-wallet-cli to save \n"
     "your current session's state. Otherwise, you might need to synchronize \n"
     "your wallet again (your wallet keys are NOT at risk in any case).\n")
   ;
@@ -3489,8 +3485,6 @@ bool simple_wallet::open_wallet(const boost::program_options::variables_map& vm)
   epee::wipeable_string password;
   try
   {
-    // TODO leviar
-    message_writer(console_color_green, false) << "\n" << tr("MAKE FROM FILE.\n");
     auto rc = tools::wallet2::make_from_file(vm, m_wallet_file, password_prompter);
     m_wallet = std::move(rc.first);
     password = std::move(std::move(rc.second).password());
@@ -3648,7 +3642,7 @@ bool simple_wallet::save_watch_only(const std::vector<std::string> &args/* = std
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::start_mining(const std::vector<std::string>& args)
 {
-  if (!m_trusted_daemon)
+  if (!is_daemon_trusted())
   {
     fail_msg_writer() << tr("this command requires a trusted daemon. Enable with --trusted-daemon");
     return true;
@@ -3662,7 +3656,7 @@ bool simple_wallet::start_mining(const std::vector<std::string>& args)
     fail_msg_writer() << tr("wallet is null");
     return true;
   }
-  COMMAND_RPC_START_MINING::request req = AUTO_VAL_INIT(req);
+  COMMAND_RPC_START_MINING::request req = AUTO_VAL_INIT(req); 
   req.miner_address = m_wallet->get_account().get_public_address_str(m_wallet->nettype());
 
   bool ok = true;
@@ -3759,6 +3753,33 @@ bool simple_wallet::set_daemon(const std::vector<std::string>& args)
     }
     LOCK_IDLE_SCOPE();
     m_wallet->init(daemon_url);
+
+    if (args.size() == 2)
+    {
+      if (args[1] == "trusted")
+        m_trusted_daemon = true;
+      else if (args[1] == "untrusted")
+        m_trusted_daemon = false;
+      else
+      {
+        fail_msg_writer() << tr("Expected trusted or untrusted, got ") << args[1] << ": assuming untrusted";
+        m_trusted_daemon = false;
+      }
+    }
+    else
+    {
+      m_trusted_daemon = false;
+      try
+      {
+        if (tools::is_local_address(m_wallet->get_daemon_address()))
+        {
+          MINFO(tr("Daemon is local, assuming trusted"));
+          m_trusted_daemon = true;
+        }
+      }
+      catch (const std::exception &e) { }
+    }
+    success_msg_writer() << boost::format("Daemon set to %s, %s") % daemon_url % (*m_trusted_daemon ? tr("trusted") : tr("untrusted"));
   } else {
     fail_msg_writer() << tr("This does not seem to be a valid daemon URL.");
   }
@@ -4144,7 +4165,7 @@ bool simple_wallet::show_blockchain_height(const std::vector<std::string>& args)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::rescan_spent(const std::vector<std::string> &args)
 {
-  if (!m_trusted_daemon)
+  if (!is_daemon_trusted())
   {
     fail_msg_writer() << tr("this command requires a trusted daemon. Enable with --trusted-daemon");
     return true;
@@ -4266,7 +4287,7 @@ bool simple_wallet::print_ring_members(const std::vector<tools::wallet2::pending
         ostr << tr(j == source.real_output ? " *" : " ") << res.outs[j].height;
       spent_key_height[i] = res.outs[source.real_output].height;
       spent_key_txid  [i] = res.outs[source.real_output].txid;
-      // visualize the distribution, using the code by moneroexamples onion-monero-viewer
+      // visualize the distribution, using the code by leviarexamples onion-leviar-viewer
       const uint64_t resolution = 79;
       std::string ring_str(resolution, '_');
       for (size_t j = 0; j < absolute_offsets.size(); ++j)
@@ -4418,6 +4439,7 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
   }
 
   vector<cryptonote::tx_destination_entry> dsts;
+  size_t num_subaddresses = 0;
   for (size_t i = 0; i < local_args.size(); i += 2)
   {
     cryptonote::address_parse_info info;
@@ -4429,6 +4451,7 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
     }
     de.addr = info.address;
     de.is_subaddress = info.is_subaddress;
+    num_subaddresses += info.is_subaddress;
 
     if (info.has_payment_id)
     {
@@ -4461,7 +4484,7 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
   }
 
   // prompt is there is no payment id and confirmation is required
-  if (!payment_id_seen && m_wallet->confirm_missing_payment_id())
+  if (!payment_id_seen && m_wallet->confirm_missing_payment_id() && dsts.size() > num_subaddresses)
   {
      std::string accepted = input_line(tr("No payment id is included with this transaction. Is this okay?  (Y/Yes/N/No): "));
      if (std::cin.eof())
@@ -4490,16 +4513,16 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
           return true;
         }
         unlock_block = bc_height + locked_blocks;
-        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon);
+        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, is_daemon_trusted());
       break;
       case TransferNew:
-        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon);
+        ptx_vector = m_wallet->create_transactions_2(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, is_daemon_trusted());
       break;
       default:
         LOG_ERROR("Unknown transfer method, using original");
         /* FALLTHRU */
       case TransferOriginal:
-        ptx_vector = m_wallet->create_transactions(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, m_trusted_daemon);
+        ptx_vector = m_wallet->create_transactions(dsts, fake_outs_count, 0 /* unlock_time */, priority, extra, is_daemon_trusted());
         break;
     }
 
@@ -4675,7 +4698,7 @@ bool simple_wallet::transfer_main(int transfer_type, const std::vector<std::stri
   }
   catch (const std::exception &e)
   {
-    handle_transfer_exception(std::current_exception(), m_trusted_daemon);
+    handle_transfer_exception(std::current_exception(), is_daemon_trusted());
   }
   catch (...)
   {
@@ -4712,7 +4735,7 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
   try
   {
     // figure out what tx will be necessary
-    auto ptx_vector = m_wallet->create_unmixable_sweep_transactions(m_trusted_daemon);
+    auto ptx_vector = m_wallet->create_unmixable_sweep_transactions(is_daemon_trusted());
 
     if (ptx_vector.empty())
     {
@@ -4781,9 +4804,23 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
       commit_or_save(ptx_vector, m_do_not_relay);
     }
   }
+  catch (const tools::error::not_enough_unlocked_money& e)
+  {
+    fail_msg_writer() << tr("Not enough money in unlocked balance");
+    std::string accepted = input_line((boost::format(tr("Discarding %s of unmixable outputs that cannot be spent, which can be undone by \"rescan_spent\".  Is this okay?  (Y/Yes/N/No): ")) % print_money(e.available())).str());
+    if (std::cin.eof())
+      return true;
+    if (command_line::is_yes(accepted))
+    {
+      try
+      {
+        m_wallet->discard_unmixable_outputs(is_daemon_trusted());
+      } catch (...) {}
+    }
+  }
   catch (const std::exception &e)
   {
-    handle_transfer_exception(std::current_exception(), m_trusted_daemon);
+    handle_transfer_exception(std::current_exception(), is_daemon_trusted());
   }
   catch (...)
   {
@@ -4914,7 +4951,7 @@ bool simple_wallet::sweep_main(uint64_t below, const std::vector<std::string> &a
   }
 
   // prompt is there is no payment id and confirmation is required
-  if (!payment_id_seen && m_wallet->confirm_missing_payment_id())
+  if (!payment_id_seen && m_wallet->confirm_missing_payment_id() && !info.is_subaddress)
   {
      std::string accepted = input_line(tr("No payment id is included with this transaction. Is this okay?  (Y/Yes/N/No): "));
      if (std::cin.eof())
@@ -4923,7 +4960,7 @@ bool simple_wallet::sweep_main(uint64_t below, const std::vector<std::string> &a
      {
        fail_msg_writer() << tr("transaction cancelled.");
 
-       return true;
+       return true; 
      }
   }
 
@@ -4932,7 +4969,7 @@ bool simple_wallet::sweep_main(uint64_t below, const std::vector<std::string> &a
   try
   {
     // figure out what tx will be necessary
-    auto ptx_vector = m_wallet->create_transactions_all(below, info.address, info.is_subaddress, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, m_trusted_daemon);
+    auto ptx_vector = m_wallet->create_transactions_all(below, info.address, info.is_subaddress, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices, is_daemon_trusted());
 
     if (ptx_vector.empty())
     {
@@ -5016,7 +5053,7 @@ bool simple_wallet::sweep_main(uint64_t below, const std::vector<std::string> &a
   }
   catch (const std::exception& e)
   {
-    handle_transfer_exception(std::current_exception(), m_trusted_daemon);
+    handle_transfer_exception(std::current_exception(), is_daemon_trusted());
   }
   catch (...)
   {
@@ -5127,7 +5164,7 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
   }
 
   // prompt if there is no payment id and confirmation is required
-  if (!payment_id_seen && m_wallet->confirm_missing_payment_id())
+  if (!payment_id_seen && m_wallet->confirm_missing_payment_id() && !info.is_subaddress)
   {
      std::string accepted = input_line(tr("No payment id is included with this transaction. Is this okay?  (Y/Yes/N/No): "));
      if (std::cin.eof())
@@ -5138,14 +5175,14 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
 
        // would like to return false, because no tx made, but everything else returns true
        // and I don't know what returning false might adversely affect.  *sigh*
-       return true;
+       return true; 
      }
   }
 
   try
   {
     // figure out what tx will be necessary
-    auto ptx_vector = m_wallet->create_transactions_single(ki, info.address, info.is_subaddress, fake_outs_count, 0 /* unlock_time */, priority, extra, m_trusted_daemon);
+    auto ptx_vector = m_wallet->create_transactions_single(ki, info.address, info.is_subaddress, fake_outs_count, 0 /* unlock_time */, priority, extra, is_daemon_trusted());
 
     if (ptx_vector.empty())
     {
@@ -5215,7 +5252,7 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
   }
   catch (const std::exception& e)
   {
-    handle_transfer_exception(std::current_exception(), m_trusted_daemon);
+    handle_transfer_exception(std::current_exception(), is_daemon_trusted());
   }
   catch (...)
   {
@@ -5245,44 +5282,6 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
     return true;
   }
   return sweep_main(below, std::vector<std::string>(++args_.begin(), args_.end()));
-}
-//----------------------------------------------------------------------------------------------------
-bool simple_wallet::donate(const std::vector<std::string> &args_)
-{
-  if(m_wallet->nettype() != cryptonote::MAINNET)
-  {
-    fail_msg_writer() << tr("donations are not enabled on the testnet or on the stagenet");
-    return true;
-  }
-
-  std::vector<std::string> local_args = args_;
-  if(local_args.empty() || local_args.size() > 5)
-  {
-     fail_msg_writer() << tr("usage: donate [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <amount> [<payment_id>]");
-     return true;
-  }
-  std::string amount_str;
-  std::string payment_id_str;
-  // get payment id and pop
-  crypto::hash payment_id;
-  crypto::hash8 payment_id8;
-  if (tools::wallet2::parse_long_payment_id (local_args.back(), payment_id ) ||
-      tools::wallet2::parse_short_payment_id(local_args.back(), payment_id8))
-  {
-    payment_id_str = local_args.back();
-    local_args.pop_back();
-  }
-  // get amount and pop
-  amount_str = local_args.back();
-  local_args.pop_back();
-  // push back address, amount, payment id
-  local_args.push_back(MONERO_DONATION_ADDR);
-  local_args.push_back(amount_str);
-  if (!payment_id_str.empty())
-    local_args.push_back(payment_id_str);
-  message_writer() << tr("Donating ") << amount_str << " to The Monero Project (donate.getmonero.org or "<< MONERO_DONATION_ADDR <<").";
-  transfer_new(local_args);
-  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::accept_loaded_tx(const std::function<size_t()> get_num_txes, const std::function<const tools::wallet2::tx_construction_data&(size_t)> &get_tx, const std::string &extra_message)
@@ -5520,7 +5519,7 @@ bool simple_wallet::submit_transfer(const std::vector<std::string> &args_)
   }
   catch (const std::exception& e)
   {
-    handle_transfer_exception(std::current_exception(), m_trusted_daemon);
+    handle_transfer_exception(std::current_exception(), is_daemon_trusted());
   }
   catch (...)
   {
@@ -5605,7 +5604,7 @@ bool simple_wallet::get_tx_proof(const std::vector<std::string> &args)
   try
   {
     std::string sig_str = m_wallet->get_tx_proof(txid, info.address, info.is_subaddress, args.size() == 3 ? args[2] : "");
-    const std::string filename = "leviar_tx_proof";
+    const std::string filename = "monero_tx_proof";
     if (epee::file_io_utils::save_string_to_file(filename, sig_str))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
@@ -5820,7 +5819,7 @@ bool simple_wallet::get_spend_proof(const std::vector<std::string> &args)
   try
   {
     const std::string sig_str = m_wallet->get_spend_proof(txid, args.size() == 2 ? args[1] : "");
-    const std::string filename = "leviar_spend_proof";
+    const std::string filename = "monero_spend_proof";
     if (epee::file_io_utils::save_string_to_file(filename, sig_str))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
@@ -5917,7 +5916,7 @@ bool simple_wallet::get_reserve_proof(const std::vector<std::string> &args)
   try
   {
     const std::string sig_str = m_wallet->get_reserve_proof(account_minreserve, args.size() == 2 ? args[1] : "");
-    const std::string filename = "leviar_reserve_proof";
+    const std::string filename = "monero_reserve_proof";
     if (epee::file_io_utils::save_string_to_file(filename, sig_str))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
@@ -6038,7 +6037,7 @@ bool simple_wallet::show_transfers(const std::vector<std::string> &args_)
   }
 
   LOCK_IDLE_SCOPE();
-
+  
   // optional in/out selector
   if (local_args.size() > 0) {
     if (local_args[0] == "in" || local_args[0] == "incoming") {
@@ -6966,7 +6965,7 @@ bool simple_wallet::wallet_info(const std::vector<std::string> &args)
   std::string description = m_wallet->get_description();
   if (description.empty())
   {
-    description = "<Not set>";
+    description = "<Not set>"; 
   }
   message_writer() << tr("Filename: ") << m_wallet->get_wallet_file();
   message_writer() << tr("Description: ") << description;
@@ -7108,7 +7107,7 @@ bool simple_wallet::import_key_images(const std::vector<std::string> &args)
     fail_msg_writer() << tr("command not supported by HW wallet");
     return true;
   }
-  if (!m_trusted_daemon)
+  if (!is_daemon_trusted())
   {
     fail_msg_writer() << tr("this command requires a trusted daemon. Enable with --trusted-daemon");
     return true;
@@ -7129,7 +7128,7 @@ bool simple_wallet::import_key_images(const std::vector<std::string> &args)
     if (height > 0)
     {
       success_msg_writer() << "Signed key images imported to height " << height << ", "
-          << print_money(spent) << " spent, " << print_money(unspent) << " unspent";
+          << print_money(spent) << " spent, " << print_money(unspent) << " unspent"; 
     } else {
       fail_msg_writer() << "Failed to import key images";
     }
@@ -7494,6 +7493,7 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_params, arg_non_deterministic );
   command_line::add_arg(desc_params, arg_electrum_seed );
   command_line::add_arg(desc_params, arg_trusted_daemon);
+  command_line::add_arg(desc_params, arg_untrusted_daemon);
   command_line::add_arg(desc_params, arg_allow_mismatched_daemon_version);
   command_line::add_arg(desc_params, arg_restore_height);
   command_line::add_arg(desc_params, arg_do_not_relay);
@@ -7507,7 +7507,7 @@ int main(int argc, char* argv[])
   const auto vm = wallet_args::main(
    argc, argv,
    "leviar-wallet-cli [--wallet-file=<file>|--generate-new-wallet=<file>] [<COMMAND>]",
-    sw::tr("This is the command line Leviar wallet. It needs to connect to a Leviar\ndaemon to work correctly.\nWARNING: Do not reuse your Leviar keys on an another fork, UNLESS this fork has key reuse mitigations built in. Doing so will harm your privacy."),
+    sw::tr("This is the command line leviar wallet. It needs to connect to a leviar\ndaemon to work correctly.\nWARNING: Do not reuse your Leviar keys on an another fork, UNLESS this fork has key reuse mitigations built in. Doing so will harm your privacy."),
     desc_params,
     positional_options,
     [](const std::string &s, bool emphasis){ tools::scoped_message_writer(emphasis ? epee::console_color_white : epee::console_color_default, true) << s; },

@@ -108,7 +108,3 @@ set_property(TARGET daemon
   PROPERTY
     OUTPUT_NAME "leviard")
 install(TARGETS daemon DESTINATION bin)
-
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
-
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")

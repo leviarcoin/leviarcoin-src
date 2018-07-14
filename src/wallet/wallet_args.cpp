@@ -91,7 +91,7 @@ namespace wallet_args
     const std::function<void(const std::string&, bool)> &print,
     const char *default_log_name,
     bool log_to_console)
-
+  
   {
     namespace bf = boost::filesystem;
     namespace po = boost::program_options;
@@ -135,7 +135,7 @@ namespace wallet_args
       if (command_line::get_arg(vm, command_line::arg_help))
       {
         Print(print) << "Leviar '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL;
-        Print(print) << wallet_args::tr("This is the command line monero wallet. It needs to connect to a monero\n"
+        Print(print) << wallet_args::tr("This is the command line leviar wallet. It needs to connect to a leviar\n"
 												  "daemon to work correctly.") << ENDL;
         Print(print) << wallet_args::tr("Usage:") << ENDL << "  " << usage;
         Print(print) << desc_all;
@@ -178,6 +178,10 @@ namespace wallet_args
     if (!command_line::is_arg_defaulted(vm, arg_log_level))
     {
       mlog_set_log(command_line::get_arg(vm, arg_log_level).c_str());
+    }
+    else if (!log_to_console)
+    {
+      mlog_set_categories("");
     }
 
     if (notice)

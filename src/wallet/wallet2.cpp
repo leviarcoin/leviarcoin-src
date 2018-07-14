@@ -172,7 +172,7 @@ uint64_t calculate_fee(uint64_t fee_per_kb, size_t bytes, uint64_t fee_multiplie
   uint64_t kB = (bytes + 1023) / 1024;
   //TODO leviar - until fork, if fee is less than 0.01 force it.
   uint64_t calc_fee = kB * fee_per_kb * fee_multiplier;
-  if (calc_fee < 1000000) calc_fee = 1000000;
+  //if (calc_fee < 1000000) calc_fee = 1000000; // removed after fork v7
 
   return calc_fee;
 }
@@ -1101,6 +1101,15 @@ void wallet2::check_acc_out_precomp(const tx_out &o, const crypto::key_derivatio
   }
   tx_scan_info.error = false;
 }
+void wallet2::check_acc_out_precomp_once(const tx_out &o, const crypto::key_derivation &derivation, const std::vector<crypto::key_derivation> &additional_derivations, size_t i, tx_scan_info_t &tx_scan_info, bool &already_seen) const
+{
+  tx_scan_info.received = boost::none;
+  if (already_seen)
+    return;
+  check_acc_out_precomp(o, derivation, additional_derivations, i, tx_scan_info);
+  if (tx_scan_info.received)
+    already_seen = true;
+}
 //----------------------------------------------------------------------------------------------------
 static uint64_t decodeRct(const rct::rctSig & rv, const crypto::key_derivation &derivation, unsigned int i, rct::key & mask, hw::device &hwdev)
 {
@@ -1164,7 +1173,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   hw::reset_mode rst(hwdev);
   hwdev_lock.unlock();
 
- // In this function, tx (probably) only contains the base information
+  // In this function, tx (probably) only contains the base information
   // (that is, the prunable stuff may or may not be included)
   if (!miner_tx && !pool)
     process_unconfirmed(txid, tx, height);
@@ -1182,6 +1191,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
   // Don't try to extract tx public key if tx has no ouputs
   size_t pk_index = 0;
   std::vector<tx_scan_info_t> tx_scan_info(tx.vout.size());
+  std::deque<bool> output_found(tx.vout.size(), false);
+
   while (!tx.vout.empty())
   {
     // if tx.vout is not empty, we loop through all tx pubkeys
@@ -1196,6 +1207,11 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 	m_callback->on_skip_transaction(height, txid, tx);
       break;
     }
+    //if (!tx_cache_data.primary.empty())
+    //{
+    //  THROW_WALLET_EXCEPTION_IF(tx_cache_data.primary.size() < pk_index || pub_key_field.pub_key != tx_cache_data.primary[pk_index - 1].pkey,
+    //      error::wallet_internal_error, "tx_cache_data is out of sync");
+    //}
 
     int num_vouts_received = 0;
     tx_pub_key = pub_key_field.pub_key;
@@ -1216,13 +1232,16 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     // additional tx pubkeys and derivations for multi-destination transfers involving one or more subaddresses
     std::vector<crypto::public_key> additional_tx_pub_keys = get_additional_tx_pub_keys_from_extra(tx);
     std::vector<crypto::key_derivation> additional_derivations;
-    for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
+    if (pk_index == 1)
     {
-      additional_derivations.push_back({});
-      if (!hwdev.generate_key_derivation(additional_tx_pub_keys[i], keys.m_view_secret_key, additional_derivations.back()))
+      for (size_t i = 0; i < additional_tx_pub_keys.size(); ++i)
       {
-        MWARNING("Failed to generate key derivation from tx pubkey, skipping");
-        additional_derivations.pop_back();
+        additional_derivations.push_back({});
+        if (!hwdev.generate_key_derivation(additional_tx_pub_keys[i], keys.m_view_secret_key, additional_derivations.back()))
+        {
+          MWARNING("Failed to generate key derivation from tx pubkey, skipping");
+          additional_derivations.pop_back();
+        }
       }
     }
     hwdev_lock.unlock();
@@ -1233,7 +1252,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     }
     else if (miner_tx && m_refresh_type == RefreshOptimizeCoinbase)
     {
-      check_acc_out_precomp(tx.vout[0], derivation, additional_derivations, 0, tx_scan_info[0]);
+      check_acc_out_precomp_once(tx.vout[0], derivation, additional_derivations, 0, tx_scan_info[0], output_found[0]);
       THROW_WALLET_EXCEPTION_IF(tx_scan_info[0].error, error::acc_outs_lookup_error, tx, tx_pub_key, m_account.get_keys());
 
       // this assumes that the miner tx pays a single address
@@ -1243,8 +1262,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
         // the first one was already checked
         for (size_t i = 1; i < tx.vout.size(); ++i)
         {
-          tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
-            std::ref(tx_scan_info[i])));
+          tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
+            std::ref(tx_scan_info[i]), std::ref(output_found[i])));
         }
         waiter.wait();
         // then scan all outputs from 0
@@ -1266,8 +1285,8 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     {
       for (size_t i = 0; i < tx.vout.size(); ++i)
       {
-        tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
-            std::ref(tx_scan_info[i])));
+        tpool.submit(&waiter, boost::bind(&wallet2::check_acc_out_precomp_once, this, std::cref(tx.vout[i]), std::cref(derivation), std::cref(additional_derivations), i,
+            std::ref(tx_scan_info[i]), std::ref(output_found[i])));
       }
       waiter.wait();
 
@@ -1288,7 +1307,7 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
     {
       for (size_t i = 0; i < tx.vout.size(); ++i)
       {
-        check_acc_out_precomp(tx.vout[i], derivation, additional_derivations, i, tx_scan_info[i]);
+        check_acc_out_precomp_once(tx.vout[i], derivation, additional_derivations, i, tx_scan_info[i], output_found[i]);
         THROW_WALLET_EXCEPTION_IF(tx_scan_info[i].error, error::acc_outs_lookup_error, tx, tx_pub_key, m_account.get_keys());
         if (tx_scan_info[i].received)
         {
@@ -1372,20 +1391,20 @@ void wallet2::process_new_transaction(const crypto::hash &txid, const cryptonote
 	      m_callback->on_money_received(height, txid, tx, td.m_amount, td.m_subaddr_index);
           }
         }
-	else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx.vout[o].amount)
+	else if (m_transfers[kit->second].m_spent || m_transfers[kit->second].amount() >= tx_scan_info[o].amount)
         {
 	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
-              << " from received " << print_money(tx.vout[o].amount) << " output already exists with "
+              << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << (m_transfers[kit->second].m_spent ? "spent" : "unspent") << " "
-              << print_money(m_transfers[kit->second].amount()) << ", received output ignored");
+              << print_money(m_transfers[kit->second].amount()) << " in tx " << m_transfers[kit->second].m_txid << ", received output ignored");
         }
         else
         {
 	  LOG_ERROR("Public key " << epee::string_tools::pod_to_hex(kit->first)
-              << " from received " << print_money(tx.vout[o].amount) << " output already exists with "
+              << " from received " << print_money(tx_scan_info[o].amount) << " output already exists with "
               << print_money(m_transfers[kit->second].amount()) << ", replacing with new output");
           // The new larger output replaced a previous smaller one
-          tx_money_got_in_outs[tx_scan_info[o].received->index] -= tx.vout[o].amount;
+          tx_money_got_in_outs[tx_scan_info[o].received->index] -= tx_scan_info[o].amount;
 
           if (!pool)
           {
@@ -5227,7 +5246,8 @@ bool wallet2::sign_tx(unsigned_tx_set &exported_txs, const std::string &signed_f
   }
   LOG_PRINT_L3("Saving signed tx data (with encryption): " << oss.str());
   std::string ciphertext = encrypt_with_view_secret_key(oss.str());
-  if (!epee::file_io_utils::save_string_to_file(signed_filename, std::string(SIGNED_TX_PREFIX) + ciphertext))
+  //if (!epee::file_io_utils::save_string_to_file(signed_filename, std::string(SIGNED_TX_PREFIX) + ciphertext))
+  if (!epee::file_io_utils::save_string_to_file(signed_filename, ciphertext))
   {
     LOG_PRINT_L0("Failed to save file to " << signed_filename);
     return false;
@@ -8619,7 +8639,16 @@ std::vector<wallet2::pending_tx> wallet2::create_unmixable_sweep_transactions(bo
 
   return create_transactions_from(m_account_public_address, false, unmixable_transfer_outputs, unmixable_dust_outputs, 0 /*fake_outs_count */, 0 /* unlock_time */, 1 /*priority */, std::vector<uint8_t>(), trusted_daemon);
 }
-
+//----------------------------------------------------------------------------------------------------
+void wallet2::discard_unmixable_outputs(bool trusted_daemon)
+{
+  // may throw
+  std::vector<size_t> unmixable_outputs = select_available_unmixable_outputs(trusted_daemon);
+  for (size_t idx : unmixable_outputs)
+  {
+    m_transfers[idx].m_spent = true;
+  }
+}
 bool wallet2::get_tx_key(const crypto::hash &txid, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys) const
 {
   additional_tx_keys.clear();
@@ -10834,12 +10863,9 @@ uint64_t wallet2::get_segregation_fork_height() const
   static const bool use_dns = true;
   if (use_dns)
   {
-    // All four MoneroPulse domains have DNSSEC on and valid
+    // All four Leviar domains have DNSSEC on and valid
     static const std::vector<std::string> dns_urls = {
-        "segheights.moneropulse.org",
-        "segheights.moneropulse.net",
-        "segheights.moneropulse.co",
-        "segheights.moneropulse.se"
+
     };
 
     const uint64_t current_height = get_blockchain_current_height();

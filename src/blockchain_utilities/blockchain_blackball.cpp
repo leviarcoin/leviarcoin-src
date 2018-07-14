@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
       "blackball-db-dir", "Specify blackball database directory",
       get_default_db_path(),
       {{ &arg_testnet_on, &arg_stagenet_on }},
-      [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val) {
+      [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
         if (testnet_stagenet[0])
           return (boost::filesystem::path(val) / "testnet").string();
         else if (testnet_stagenet[1])
@@ -208,12 +208,12 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Leviar '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Monero '" << MONERO_RELEASE_NAME << "' (v" << MONERO_VERSION_FULL << ")" << ENDL << ENDL;
     std::cout << desc_options << std::endl;
     return 1;
   }
 
-  mlog_configure(mlog_get_default_log_path("leviar-blockchain-blackball.log"), true);
+  mlog_configure(mlog_get_default_log_path("monero-blockchain-blackball.log"), true);
   if (!command_line::is_arg_defaulted(vm, arg_log_level))
     mlog_set_log(command_line::get_arg(vm, arg_log_level).c_str());
   else

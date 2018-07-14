@@ -189,6 +189,10 @@ namespace cryptonote
     ADD_CHECKPOINT(400000, "f9bd42517ef8a94b781d7d8d644aab331a256fd570973843d6868278af246ea0");
     ADD_CHECKPOINT(450000, "f7ee13696350509e1161e0b5900706c969f4640c477b74f1ea91a2f61cfda282");
     ADD_CHECKPOINT(480000, "4ba37178d0777214a9c9f0cf7d5ff7c9b775af9103531850ef94c5c8271e53b7");
+    ADD_CHECKPOINT(490000, "41dfad1307e3ed37ec671be460b75c670e502d2ec8fb02c35492aaecc0f8d1fe");
+    ADD_CHECKPOINT(491000, "7fa574972fb3800c865c159a34f9bbe4b5da6d305c23e314291e5124e7da8ecc");
+    ADD_CHECKPOINT(492000, "2a26e4ddb242c419c2899c7a755dde288b71bc4ed3ee98ce36d7ce5a7c783171");
+    ADD_CHECKPOINT(493500, "0ebd9977e905aebf5f78e66db93c2103e4c834f49f2edfa0055cf37680c089ef");
 
     return true;
   }
@@ -235,7 +239,7 @@ namespace cryptonote
     return true;
     std::vector<std::string> records;
 
-    // All four MoneroPulse domains have DNSSEC on and valid
+    // All four Leviar domains have DNSSEC on and valid
     static const std::vector<std::string> dns_urls = {};
 
     static const std::vector<std::string> testnet_dns_urls = {};

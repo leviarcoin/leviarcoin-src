@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-//
+// 
 // All rights reserved.
-//
+// 
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-//
+// 
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-//
+// 
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-//
+// 
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-//
+// 
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+// 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <cstdio>
@@ -43,6 +43,7 @@ using namespace epee;
 
 #include "crypto/crypto.h"
 #include "util.h"
+#include "stack_trace.h"
 #include "memwipe.h"
 #include "cryptonote_config.h"
 #include "net/http_client.h"                        // epee::net_utils::...
@@ -51,7 +52,7 @@ using namespace epee;
   #include <windows.h>
   #include <shlobj.h>
   #include <strsafe.h>
-#else
+#else 
   #include <sys/file.h>
   #include <sys/utsname.h>
   #include <sys/stat.h>
@@ -209,13 +210,13 @@ namespace tools
     // Call GetNativeSystemInfo if supported or GetSystemInfo otherwise.
 
     pGNSI = (PGNSI) GetProcAddress(
-      GetModuleHandle(TEXT("kernel32.dll")),
+      GetModuleHandle(TEXT("kernel32.dll")), 
       "GetNativeSystemInfo");
     if(NULL != pGNSI)
       pGNSI(&si);
     else GetSystemInfo(&si);
 
-    if ( VER_PLATFORM_WIN32_NT==osvi.dwPlatformId &&
+    if ( VER_PLATFORM_WIN32_NT==osvi.dwPlatformId && 
       osvi.dwMajorVersion > 4 )
     {
       StringCchCopy(pszOS, BUFSIZE, TEXT("Microsoft "));
@@ -239,7 +240,7 @@ namespace tools
         }
 
         pGPI = (PGPI) GetProcAddress(
-          GetModuleHandle(TEXT("kernel32.dll")),
+          GetModuleHandle(TEXT("kernel32.dll")), 
           "GetProductInfo");
 
         pGPI( osvi.dwMajorVersion, osvi.dwMinorVersion, 0, 0, &dwType);
@@ -369,7 +370,7 @@ namespace tools
         {
           StringCchCat(pszOS, BUFSIZE, TEXT( "Professional" ));
         }
-        else
+        else 
         {
           if( osvi.wSuiteMask & VER_SUITE_DATACENTER )
             StringCchCat(pszOS, BUFSIZE, TEXT( "Datacenter Server" ));
@@ -400,10 +401,10 @@ namespace tools
           StringCchCat(pszOS, BUFSIZE, TEXT(", 32-bit"));
       }
 
-      return pszOS;
+      return pszOS; 
     }
     else
-    {
+    {  
       printf( "This sample does not support this version of Windows.\n");
       return pszOS;
     }
@@ -439,17 +440,22 @@ std::string get_nix_version_display_string()
 
     if (SHGetSpecialFolderPathW(NULL, psz_path, nfolder, iscreate))
     {
-      int size_needed = WideCharToMultiByte(CP_UTF8, 0, psz_path, wcslen(psz_path), NULL, 0, NULL, NULL);
-      std::string folder_name(size_needed, 0);
-      WideCharToMultiByte(CP_UTF8, 0, psz_path, wcslen(psz_path), &folder_name[0], size_needed, NULL, NULL);
-      return folder_name;
+      try
+      {
+        return string_tools::utf16_to_utf8(psz_path);
+      }
+      catch (const std::exception &e)
+      {
+        MERROR("utf16_to_utf8 failed: " << e.what());
+        return "";
+      }
     }
 
     LOG_ERROR("SHGetSpecialFolderPathW() failed, could not obtain requested path.");
     return "";
   }
 #endif
-
+  
   std::string get_default_data_dir()
   {
     /* Please for the love of god refactor  the ifdefs out of this */
@@ -503,18 +509,20 @@ std::string get_nix_version_display_string()
     int code;
 #if defined(WIN32)
     // Maximizing chances for success
-    WCHAR wide_replacement_name[1000];
-    MultiByteToWideChar(CP_UTF8, 0, replacement_name.c_str(), replacement_name.size() + 1, wide_replacement_name, 1000);
-    WCHAR wide_replaced_name[1000];
-    MultiByteToWideChar(CP_UTF8, 0, replaced_name.c_str(), replaced_name.size() + 1, wide_replaced_name, 1000);
+    std::wstring wide_replacement_name;
+    try { wide_replacement_name = string_tools::utf8_to_utf16(replacement_name); }
+    catch (...) { return std::error_code(GetLastError(), std::system_category()); }
+    std::wstring wide_replaced_name;
+    try { wide_replaced_name = string_tools::utf8_to_utf16(replaced_name); }
+    catch (...) { return std::error_code(GetLastError(), std::system_category()); }
 
-    DWORD attributes = ::GetFileAttributesW(wide_replaced_name);
+    DWORD attributes = ::GetFileAttributesW(wide_replaced_name.c_str());
     if (INVALID_FILE_ATTRIBUTES != attributes)
     {
-      ::SetFileAttributesW(wide_replaced_name, attributes & (~FILE_ATTRIBUTE_READONLY));
+      ::SetFileAttributesW(wide_replaced_name.c_str(), attributes & (~FILE_ATTRIBUTE_READONLY));
     }
 
-    bool ok = 0 != ::MoveFileExW(wide_replacement_name, wide_replaced_name, MOVEFILE_REPLACE_EXISTING);
+    bool ok = 0 != ::MoveFileExW(wide_replacement_name.c_str(), wide_replaced_name.c_str(), MOVEFILE_REPLACE_EXISTING);
     code = ok ? 0 : static_cast<int>(::GetLastError());
 #else
     bool ok = 0 == std::rename(replacement_name.c_str(), replaced_name.c_str());
@@ -527,7 +535,7 @@ std::string get_nix_version_display_string()
   {
     ub_ctx *ctx = ub_ctx_create();
     if (!ctx) return false; // cheat a bit, should not happen unless OOM
-    char *monero = strdup("leviar"), *unbound = strdup("unbound");
+    char *monero = strdup("monero"), *unbound = strdup("unbound");
     ub_ctx_zone_add(ctx, monero, unbound); // this calls ub_ctx_finalize first, then errors out with UB_SYNTAX
     free(unbound);
     free(monero);
@@ -560,9 +568,47 @@ std::string get_nix_version_display_string()
     }
     return false;
   }
+
+#ifdef STACK_TRACE
+#ifdef _WIN32
+  // https://stackoverflow.com/questions/1992816/how-to-handle-seg-faults-under-windows
+  static LONG WINAPI windows_crash_handler(PEXCEPTION_POINTERS pExceptionInfo)
+  {
+    tools::log_stack_trace("crashing");
+    exit(1);
+    return EXCEPTION_CONTINUE_SEARCH;
+  }
+  static void setup_crash_dump()
+  {
+    SetUnhandledExceptionFilter(windows_crash_handler);
+  }
+#else
+  static void posix_crash_handler(int signal)
+  {
+    tools::log_stack_trace(("crashing with fatal signal " + std::to_string(signal)).c_str());
+#ifdef NDEBUG
+    _exit(1);
+#else
+    abort();
+#endif
+  }
+  static void setup_crash_dump()
+  {
+    signal(SIGSEGV, posix_crash_handler);
+    signal(SIGBUS, posix_crash_handler);
+    signal(SIGILL, posix_crash_handler);
+    signal(SIGFPE, posix_crash_handler);
+  }
+#endif
+#else
+  static void setup_crash_dump() {}
+#endif
+
   bool on_startup()
   {
     mlog_configure("", true);
+
+    setup_crash_dump();
 
     sanitize_locale();
 
@@ -618,6 +664,13 @@ std::string get_nix_version_display_string()
 
   bool is_local_address(const std::string &address)
   {
+    // always assume Tor/I2P addresses to be untrusted by default
+    if (boost::ends_with(address, ".onion") || boost::ends_with(address, ".i2p"))
+    {
+      MDEBUG("Address '" << address << "' is Tor/I2P, non local");
+      return false;
+    }
+
     // extract host
     epee::net_utils::http::url_content u_c;
     if (!epee::net_utils::parse_url(address, u_c))
@@ -710,5 +763,23 @@ std::string get_nix_version_display_string()
     if (!SHA256_Final((unsigned char*)hash.data, &ctx))
       return false;
     return true;
+  }
+
+  boost::optional<std::pair<uint32_t, uint32_t>> parse_subaddress_lookahead(const std::string& str)
+  {
+    auto pos = str.find(":");
+    bool r = pos != std::string::npos;
+    uint32_t major;
+    r = r && epee::string_tools::get_xtype_from_string(major, str.substr(0, pos));
+    uint32_t minor;
+    r = r && epee::string_tools::get_xtype_from_string(minor, str.substr(pos + 1));
+    if (r)
+    {
+      return std::make_pair(major, minor);
+    }
+    else
+    {
+      return {};
+    }
   }
 }

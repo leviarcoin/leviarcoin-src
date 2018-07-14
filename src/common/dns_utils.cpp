@@ -45,11 +45,11 @@ namespace bf = boost::filesystem;
 
 static const char *DEFAULT_DNS_PUBLIC_ADDR[] =
 {
-  /*"194.150.168.168",    // CCC (Germany)
+  "194.150.168.168",    // CCC (Germany)
   "81.3.27.54",         // Lightning Wire Labs (Germany)
   "31.3.135.232",       // OpenNIC (Switzerland)
   "80.67.169.40",       // FDN (France)
-  "209.58.179.186",     // Cyberghost (Singapore)*/
+  "209.58.179.186",     // Cyberghost (Singapore)
 };
 
 static boost::mutex instance_lock;
@@ -62,39 +62,6 @@ namespace
  * the unbound library packaged with this source.  The license and source
  * can be found in $PROJECT_ROOT/external/unbound
  */
-
-/* Cert builtin commented out until it's used, as the compiler complains
-
-// return the built in root update certificate
-static const char*
-get_builtin_cert(void)
-{
-	return
-// The ICANN CA fetched at 24 Sep 2010.  Valid to 2028
-"-----BEGIN CERTIFICATE-----\n"
-"MIIDdzCCAl+gAwIBAgIBATANBgkqhkiG9w0BAQsFADBdMQ4wDAYDVQQKEwVJQ0FO\n"
-"TjEmMCQGA1UECxMdSUNBTk4gQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkxFjAUBgNV\n"
-"BAMTDUlDQU5OIFJvb3QgQ0ExCzAJBgNVBAYTAlVTMB4XDTA5MTIyMzA0MTkxMloX\n"
-"DTI5MTIxODA0MTkxMlowXTEOMAwGA1UEChMFSUNBTk4xJjAkBgNVBAsTHUlDQU5O\n"
-"IENlcnRpZmljYXRpb24gQXV0aG9yaXR5MRYwFAYDVQQDEw1JQ0FOTiBSb290IENB\n"
-"MQswCQYDVQQGEwJVUzCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKDb\n"
-"cLhPNNqc1NB+u+oVvOnJESofYS9qub0/PXagmgr37pNublVThIzyLPGCJ8gPms9S\n"
-"G1TaKNIsMI7d+5IgMy3WyPEOECGIcfqEIktdR1YWfJufXcMReZwU4v/AdKzdOdfg\n"
-"ONiwc6r70duEr1IiqPbVm5T05l1e6D+HkAvHGnf1LtOPGs4CHQdpIUcy2kauAEy2\n"
-"paKcOcHASvbTHK7TbbvHGPB+7faAztABLoneErruEcumetcNfPMIjXKdv1V1E3C7\n"
-"MSJKy+jAqqQJqjZoQGB0necZgUMiUv7JK1IPQRM2CXJllcyJrm9WFxY0c1KjBO29\n"
-"iIKK69fcglKcBuFShUECAwEAAaNCMEAwDwYDVR0TAQH/BAUwAwEB/zAOBgNVHQ8B\n"
-"Af8EBAMCAf4wHQYDVR0OBBYEFLpS6UmDJIZSL8eZzfyNa2kITcBQMA0GCSqGSIb3\n"
-"DQEBCwUAA4IBAQAP8emCogqHny2UYFqywEuhLys7R9UKmYY4suzGO4nkbgfPFMfH\n"
-"6M+Zj6owwxlwueZt1j/IaCayoKU3QsrYYoDRolpILh+FPwx7wseUEV8ZKpWsoDoD\n"
-"2JFbLg2cfB8u/OlE4RYmcxxFSmXBg0yQ8/IoQt/bxOcEEhhiQ168H2yE5rxJMt9h\n"
-"15nu5JBSewrCkYqYYmaxyOC3WrVGfHZxVI7MpIFcGdvSb2a1uyuua8l0BKgk3ujF\n"
-"0/wsHNeP22qNyVO+XVBzrM8fk8BSUFuiT/6tZTYXRtEt5aKQZgXbKU5dUF3jT9qg\n"
-"j/Br5BZw3X/zd325TvnswzMC1+ljLzHnQGGk\n"
-"-----END CERTIFICATE-----\n"
-		;
-}
-*/
 
 /** return the built in root DS trust anchor */
 static const char*
@@ -448,6 +415,8 @@ namespace
 
 bool load_txt_records_from_dns(std::vector<std::string> &good_records, const std::vector<std::string> &dns_urls)
 {
+  //TODO leviar
+  return false;
   // Prevent infinite recursion when distributing
   if (dns_urls.empty()) return false;
 
@@ -465,7 +434,7 @@ bool load_txt_records_from_dns(std::vector<std::string> &good_records, const std
   for (size_t n = 0; n < dns_urls.size(); ++n)
   {
     threads[n] = boost::thread([n, dns_urls, &records, &avail, &valid](){
-      records[n] = tools::DNSResolver::instance().get_txt_record(dns_urls[n], avail[n], valid[n]);
+      records[n] = tools::DNSResolver::instance().get_txt_record(dns_urls[n], avail[n], valid[n]); 
     });
   }
   for (size_t n = 0; n < dns_urls.size(); ++n)
@@ -505,7 +474,7 @@ bool load_txt_records_from_dns(std::vector<std::string> &good_records, const std
 
   if (num_valid_records < 2)
   {
-    LOG_PRINT_L0("WARNING: no two valid MoneroPulse DNS checkpoint records were received");
+    LOG_PRINT_L0("WARNING: no two valid Leviar DNS checkpoint records were received");
     return false;
   }
 
@@ -527,7 +496,7 @@ bool load_txt_records_from_dns(std::vector<std::string> &good_records, const std
 
   if (good_records_index < 0)
   {
-    LOG_PRINT_L0("WARNING: no two MoneroPulse DNS checkpoint records matched");
+    LOG_PRINT_L0("WARNING: no two Leviar DNS checkpoint records matched");
     return false;
   }
 

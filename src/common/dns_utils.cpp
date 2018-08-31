@@ -70,6 +70,12 @@ get_builtin_ds(void)
   return
 ". IN DS 19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5\n";
 }
+static const char*
+get_builtin_ds_2(void)
+{
+  return
+". IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D\n";
+}
 
 /************************************************************
  ************************************************************
@@ -208,6 +214,7 @@ DNSResolver::DNSResolver() : m_data(new DNSResolverData())
   }
 
   ub_ctx_add_ta(m_data->m_ub_context, string_copy(::get_builtin_ds()));
+  ub_ctx_add_ta(m_data->m_ub_context, string_copy(::get_builtin_ds_2()));
 }
 
 DNSResolver::~DNSResolver()

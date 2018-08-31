@@ -59,22 +59,20 @@
 #define UPGRADE_HEIGHT_V2                                     uint32_t(325000)
 #define UPGRADE_HEIGHT_V3                                     uint32_t(337000)
 #define UPGRADE_HEIGHT_V4                                     uint32_t(493500)
+#define UPGRADE_HEIGHT_V5                                     uint32_t(586000)
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                       size_t(100)
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE             size_t(1000000) //size of block (bytes) after which reward for block calculated using block size
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1          size_t(20000)
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2          size_t(200000)
+#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2_ALT      60000
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_CURRENT     CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE
+#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5          300000
 
 #define MAX_BLOCK_SIZE_INITIAL                                ((size_t)20 * 1024)
 #define MAX_BLOCK_SIZE_GROWTH_SPEED_NUMERATOR                 ((uint64_t)500 * 1024)
 #define MAX_BLOCK_SIZE_GROWTH_SPEED_NUMERATOR_V1              ((uint64_t)100 * 1024)
 #define MAX_BLOCK_SIZE_GROWTH_SPEED_DENOMINATOR               ((uint64_t)365 * 24 * 60 * 60 / DIFFICULTY_TARGET_V1)
 
-//#define CRYPTONOTE_REWARD_BLOCKS_WINDOW                     100
-//#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2        60000 //size of block (bytes) after which reward for block calculated using block size
-#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2_ALT      60000 //used to calc DYNAMIC_FEE_PER_KB_BASE_FEE_V5
-//#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1        20000 //size of block (bytes) after which reward for block calculated using block size - before first fork
-#define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5          300000 //size of block (bytes) after which reward for block calculated using block size - second change, from v5
 #define CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE                600
 #define CRYPTONOTE_DISPLAY_DECIMAL_POINT                      8
 // COIN - number of smallest units in one coin
@@ -85,6 +83,7 @@
 #define DYNAMIC_FEE_PER_KB_BASE_FEE                           ((uint64_t)200000) // 4 * pow(10, 5)
 #define DYNAMIC_FEE_PER_KB_BASE_BLOCK_REWARD                  ((uint64_t)1000000000) // 10 * pow(10,8)
 #define DYNAMIC_FEE_PER_KB_BASE_FEE_V5                        ((uint64_t)400000 * (uint64_t)CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2_ALT / CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5)
+#define DYNAMIC_FEE_PER_KB_BASE_FEE_V7                        (uint64_t)40000
 
 #define ORPHANED_BLOCKS_MAX_COUNT                             100
 

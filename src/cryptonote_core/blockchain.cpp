@@ -2896,10 +2896,16 @@ static uint64_t get_fee_quantization_mask()
 }
 
 //------------------------------------------------------------------
-uint64_t Blockchain::get_dynamic_per_kb_fee(uint64_t block_reward, size_t median_block_size, uint8_t version)
+uint64_t Blockchain::get_dynamic_per_kb_fee(uint64_t block_reward, size_t median_block_size, uint8_t version, uint32_t next_height)
 {
   const uint64_t min_block_size = get_min_block_size(version);
-  const uint64_t fee_per_kb_base = version >= 5 ? DYNAMIC_FEE_PER_KB_BASE_FEE_V5 : DYNAMIC_FEE_PER_KB_BASE_FEE;
+  uint64_t fee_per_kb_base = DYNAMIC_FEE_PER_KB_BASE_FEE;
+
+  if (next_height >= UPGRADE_HEIGHT_V5) {
+    fee_per_kb_base = DYNAMIC_FEE_PER_KB_BASE_FEE_V7;
+  } else {
+    if (version >= 5) fee_per_kb_base = DYNAMIC_FEE_PER_KB_BASE_FEE_V5;
+  }
 
   if (median_block_size < min_block_size)
     median_block_size = min_block_size;
@@ -2944,7 +2950,7 @@ bool Blockchain::check_fee(size_t blob_size, uint64_t fee) const
     uint64_t base_reward;
     if (!get_block_reward(next_height, median, 1, already_generated_coins, base_reward, version, 0))
       return false;
-    fee_per_kb = get_dynamic_per_kb_fee(base_reward, median, version);
+    fee_per_kb = get_dynamic_per_kb_fee(base_reward, median, version, next_height);
   }
   MDEBUG("Using " << print_money(fee_per_kb) << "/kB fee");
 
@@ -2990,7 +2996,7 @@ uint64_t Blockchain::get_dynamic_per_kb_fee_estimate(uint64_t grace_blocks) cons
     base_reward = BLOCK_REWARD_OVERESTIMATE;
   }
 
-  uint64_t fee = get_dynamic_per_kb_fee(base_reward, median, version);
+  uint64_t fee = get_dynamic_per_kb_fee(base_reward, median, version, next_height);
   MDEBUG("Estimating " << grace_blocks << "-block fee at " << print_money(fee) << "/kB");
   return fee;
 }

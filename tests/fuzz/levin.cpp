@@ -158,6 +158,7 @@ namespace
     }
 
     virtual bool close()                              { return true; }
+    virtual bool send_done()                          { return true; }
     virtual bool call_run_once_service_io()           { return true; }
     virtual bool request_callback()                   { return true; }
     virtual boost::asio::io_service& get_io_service() { return m_io_service; }
@@ -297,6 +298,7 @@ int LevinFuzzer::init()
 
 int LevinFuzzer::run(const std::string &filename)
 {
+
   std::string s;
 
 #if 0
@@ -317,24 +319,6 @@ int LevinFuzzer::run(const std::string &filename)
     std::cout << "Error: failed to load file " << filename << std::endl;
     return 1;
   }
-  try
-  {
-    //std::unique_ptr<test_connection> conn = new test();
-    boost::asio::io_service io_service;
-    test_levin_protocol_handler_config m_handler_config;
-    test_levin_commands_handler *m_pcommands_handler = new test_levin_commands_handler();
-    m_handler_config.set_handler(m_pcommands_handler, [](epee::levin::levin_commands_handler<test_levin_connection_context> *handler) { delete handler; });
-    std::unique_ptr<test_connection> conn(new test_connection(io_service, m_handler_config));
-    conn->start();
-    //m_commands_handler.invoke_out_buf(expected_out_data);
-    //m_commands_handler.return_code(expected_return_code);
-    conn->m_protocol_handler.handle_recv(s.data(), s.size());
-  }
-  catch (const std::exception &e)
-  {
-    std::cerr << "Failed to test http client: " << e.what() << std::endl;
-    return 1;
-  }
   return 0;
 }
 
@@ -343,4 +327,3 @@ int main(int argc, const char **argv)
   LevinFuzzer fuzzer;
   return run_fuzzer(argc, argv, fuzzer);
 }
-

@@ -585,10 +585,11 @@ namespace cryptonote
      * @param block_reward the current block reward
      * @param median_block_size the median blob's size in the past window
      * @param version hard fork version for rules and constants to use
+     * @param next_height hard fork height
      *
      * @return the per kB fee
      */
-    static uint64_t get_dynamic_per_kb_fee(uint64_t block_reward, size_t median_block_size, uint8_t version);
+    static uint64_t get_dynamic_per_kb_fee(uint64_t block_reward, size_t median_block_size, uint8_t version, uint32_t next_height);
 
     /**
      * @brief get dynamic per kB fee estimate for the next few blocks

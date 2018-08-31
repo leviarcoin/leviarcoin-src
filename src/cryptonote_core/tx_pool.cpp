@@ -1083,9 +1083,6 @@ namespace cryptonote
     uint32_t next_height = m_blockchain.get_current_blockchain_height() ? m_blockchain.get_current_blockchain_height() + 1 : 1;
     get_block_reward(next_height, median_size, total_size, already_generated_coins, best_coinbase, version, fee);
 
-    // TODO leviar (fixed here 125 instead of 130)
-    //size_t max_total_size_pre_v5 = (130 * median_size) / 100 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
-
     size_t max_total_size_pre_v5_median = (125 * median_size) / 100;
     size_t max_cumulative_size = get_max_block_cumulative_size(next_height);
     size_t max_total_size_pre_v5 = std::min(max_total_size_pre_v5_median, max_cumulative_size) - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
@@ -1094,7 +1091,7 @@ namespace cryptonote
     size_t max_total_size = version >= 5 ? max_total_size_v5 : max_total_size_pre_v5;
 
     if (next_height >= UPGRADE_HEIGHT_V4) {
-	max_total_size = max_total_size_pre_v5;
+	  max_total_size = max_total_size_pre_v5;
     }
 	  
     std::unordered_set<crypto::key_image> k_images;

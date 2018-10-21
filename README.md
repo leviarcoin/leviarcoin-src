@@ -13,9 +13,10 @@ Leviar uses a fixed-schedule software upgrade (hard fork) mechanism to implement
 Dates are provided in the format YYYY-MM-DD.
 
 
-| Software upgrade block height | Date       | Fork version | Minimum Leviar version | Recommended Leviar version | Details                                                                            |
-| 1546000                        | 2018-06-30 | v7                | v18.06              | v18.06                  | Cryptonight variant 1, ringsize >= 7, sorted inputs
-| XXXXXXX                        | 2018-10-XX | XX                | XXXXXXXXX              | XXXXXXXXX                  | X
+| Software upgrade block height | Date | Fork version | Minimum Leviar version | Recommended Leviar version | Details
+| 490000 | 2018-06-30 | v7 | v18.06 | v18.06.4 | Cryptonight variant 1, ringsize >= 7, sorted inputs
+| 657000 | 2018-11-05 | v8 | v18.06.4 | v18.06.4 | Max transaction size at half the penalty free block size, bulletproofs enabled, cryptonight variant 2
+| 658500 | 2018-11-06 | v9 | v18.06.4 | v18.06.4 | Bulletproofs required
 
 X's indicate that these details have not been determined as of commit date.
 
@@ -25,6 +26,13 @@ X's indicate that these details have not been determined as of commit date.
 
 Leviar uses the CMake build system and a top-level [Makefile](Makefile) that
 invokes cmake commands as needed.
+
+#### Build dir
+
+If you encounter this error:
+        CMake Error: The source directory "/path/to/build/dir" does not appear to contain CMakeLists.txt.
+Try with:
+        USE_SINGLE_BUILDDIR=1 make
 
 #### On Linux and OS X
 

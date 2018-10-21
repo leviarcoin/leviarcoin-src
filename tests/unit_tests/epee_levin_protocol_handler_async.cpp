@@ -202,6 +202,17 @@ namespace
     }
 
   protected:
+    test_connection_ptr create_connection(bool start = true)
+    {
+      test_connection_ptr conn(new test_connection(m_io_service, m_handler_config));
+      if (start)
+      {
+        conn->start();
+      }
+      return conn;
+    }
+
+  protected:
     boost::asio::io_service m_io_service;
     test_levin_protocol_handler_config m_handler_config;
     test_levin_commands_handler *m_pcommands_handler, &m_commands_handler;
@@ -225,6 +236,8 @@ namespace
     virtual void SetUp()
     {
       async_protocol_handler_test::SetUp();
+
+      m_conn = create_connection();
 
       m_in_data.assign(256, 't');
 
@@ -258,16 +271,22 @@ namespace
 
 TEST_F(positive_test_connection_to_levin_protocol_handler_calls, new_handler_is_not_initialized)
 {
+  test_connection_ptr conn = create_connection(false);
+  ASSERT_FALSE(conn->m_protocol_handler.m_connection_initialized);
   ASSERT_EQ(0, m_handler_config.get_connections_count());
   ASSERT_EQ(0, m_commands_handler.new_connection_counter());
+  conn.reset();
   ASSERT_EQ(0, m_handler_config.get_connections_count());
   ASSERT_EQ(0, m_commands_handler.close_connection_counter());
 }
 
 TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_initialization_and_destruction_is_correct)
 {
+  test_connection_ptr conn = create_connection();
+  ASSERT_TRUE(conn->m_protocol_handler.m_connection_initialized);
   ASSERT_EQ(1, m_handler_config.get_connections_count());
   ASSERT_EQ(1, m_commands_handler.new_connection_counter());
+  conn.reset();
   ASSERT_EQ(0, m_handler_config.get_connections_count());
   ASSERT_EQ(1, m_commands_handler.close_connection_counter());
 }
@@ -278,6 +297,10 @@ TEST_F(positive_test_connection_to_levin_protocol_handler_calls, concurent_handl
   auto create_and_destroy_connections = [this, connection_count]()
   {
     std::vector<test_connection_ptr> connections(connection_count);
+    for (size_t i = 0; i < connection_count; ++i)
+    {
+      connections[i] = create_connection();
+    }
 
     for (size_t i = 0; i < connection_count; ++i)
     {
@@ -309,6 +332,8 @@ TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_process
   const int expected_return_code = 6732;
   const std::string expected_out_data(128, 'w');
 
+  test_connection_ptr conn = create_connection();
+
   std::string in_data(256, 'q');
 
   epee::levin::bucket_head2 req_head;
@@ -325,12 +350,44 @@ TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_process
   m_commands_handler.invoke_out_buf(expected_out_data);
   m_commands_handler.return_code(expected_return_code);
 
+  // Test
+  ASSERT_TRUE(conn->m_protocol_handler.handle_recv(buf.data(), buf.size()));
+
+  //
+  // Check
+  //
+
+  // Check connection and levin_commands_handler states
+  ASSERT_EQ(1, m_commands_handler.invoke_counter());
+  ASSERT_EQ(0, m_commands_handler.notify_counter());
+  ASSERT_EQ(expected_command, m_commands_handler.last_command());
+  ASSERT_EQ(in_data, m_commands_handler.last_in_buf());
+  ASSERT_LE(1, conn->send_counter());
+
+  // Parse send data
+  std::string send_data = conn->last_send_data();
+  epee::levin::bucket_head2 resp_head;
+  resp_head = *reinterpret_cast<const epee::levin::bucket_head2*>(send_data.data());
+  ASSERT_LT(sizeof(resp_head), send_data.size());
+  std::string out_data = send_data.substr(sizeof(resp_head));
+
+  // Check sent response
+  ASSERT_EQ(expected_out_data, out_data);
+  ASSERT_EQ(LEVIN_SIGNATURE, resp_head.m_signature);
+  ASSERT_EQ(expected_command, resp_head.m_command);
+  ASSERT_EQ(expected_return_code, resp_head.m_return_code);
+  ASSERT_EQ(expected_out_data.size(), resp_head.m_cb);
+  ASSERT_FALSE(resp_head.m_have_to_return_data);
+  ASSERT_EQ(LEVIN_PROTOCOL_VER_1, resp_head.m_protocol_version);
+  ASSERT_TRUE(0 != (resp_head.m_flags & LEVIN_PACKET_RESPONSE));
 }
 
 TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_processes_handle_read_as_notify)
 {
   // Setup
   const int expected_command = 4673261;
+
+  test_connection_ptr conn = create_connection();
 
   std::string in_data(256, 'e');
 
@@ -345,21 +402,33 @@ TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_process
   std::string buf(reinterpret_cast<const char*>(&req_head), sizeof(req_head));
   buf += in_data;
 
+  // Test
+  ASSERT_TRUE(conn->m_protocol_handler.handle_recv(buf.data(), buf.size()));
+
   // Check connection and levin_commands_handler states
   ASSERT_EQ(1, m_commands_handler.notify_counter());
   ASSERT_EQ(0, m_commands_handler.invoke_counter());
   ASSERT_EQ(expected_command, m_commands_handler.last_command());
   ASSERT_EQ(in_data, m_commands_handler.last_in_buf());
+  ASSERT_LE(0, conn->send_counter());
+  ASSERT_TRUE(conn->last_send_data().empty());
 }
 
 TEST_F(positive_test_connection_to_levin_protocol_handler_calls, handler_processes_qued_callback)
 {
+  test_connection_ptr conn = create_connection();
+
+  conn->m_protocol_handler.handle_qued_callback();
+  conn->m_protocol_handler.handle_qued_callback();
+  conn->m_protocol_handler.handle_qued_callback();
+
   ASSERT_EQ(3, m_commands_handler.callback_counter());
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_big_packet_1)
 {
   std::string buf("yyyyyy");
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(buf.data(), max_packet_size + 1));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_big_packet_2)
@@ -368,12 +437,17 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_big_pa
   const size_t first_packet_size = sizeof(m_req_head) - 1;
 
   m_buf.resize(first_packet_size);
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
+
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), max_packet_size - m_buf.size() + 1));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_invalid_signature_for_full_header)
 {
   m_req_head.m_signature = LEVIN_SIGNATURE ^ 1;
   prepare_buf();
+
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_invalid_signature_for_partial_header)
@@ -381,22 +455,32 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_invali
   m_req_head.m_signature = LEVIN_SIGNATURE ^ 1;
   prepare_buf();
   m_buf.resize(sizeof(m_req_head.m_signature));
+
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_big_cb)
 {
   m_req_head.m_cb = max_packet_size + 1;
   prepare_buf();
+
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, does_not_handle_data_after_close)
 {
   prepare_buf();
+
+  ASSERT_TRUE(m_conn->m_protocol_handler.close());
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_network_error)
 {
   prepare_buf();
+
+  m_conn->send_return(false);
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 }
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_chunked_header)
@@ -409,9 +493,12 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_chunke
   std::string buf2 = m_buf.substr(buf1_size);
   ASSERT_EQ(m_buf, buf1 + buf2);
 
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(buf1.data(), buf1.size()));
   ASSERT_EQ(0, m_commands_handler.invoke_counter());
+
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(buf2.data(), buf2.size()));
   ASSERT_EQ(1, m_commands_handler.invoke_counter());
-}
+} 
 
 
 TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_chunked_body)
@@ -424,7 +511,10 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_chunke
   std::string buf2 = m_buf.substr(buf1_size);
   ASSERT_EQ(m_buf, buf1 + buf2);
 
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(buf1.data(), buf1.size()));
   ASSERT_EQ(0, m_commands_handler.invoke_counter());
+
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(buf2.data(), buf2.size()));
   ASSERT_EQ(1, m_commands_handler.invoke_counter());
 }
 
@@ -432,6 +522,8 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_two_re
 {
   prepare_buf();
   m_buf.append(m_buf);
+
+  ASSERT_TRUE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
   ASSERT_EQ(2, m_commands_handler.invoke_counter());
 }
 
@@ -439,4 +531,6 @@ TEST_F(test_levin_protocol_handler__hanle_recv_with_invalid_data, handles_unexpe
 {
   m_req_head.m_flags = LEVIN_PACKET_RESPONSE;
   prepare_buf();
+
+  ASSERT_FALSE(m_conn->m_protocol_handler.handle_recv(m_buf.data(), m_buf.size()));
 }

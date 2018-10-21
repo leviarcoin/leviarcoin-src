@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-//
+// 
 // All rights reserved.
-//
+// 
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-//
+// 
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-//
+// 
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-//
+// 
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-//
+// 
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+// 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <cstring>
@@ -671,8 +671,7 @@ TEST(Serialization, serializes_ringct_types)
 TEST(Serialization, portability_wallet)
 {
   const cryptonote::network_type nettype = cryptonote::TESTNET;
-  const bool restricted = false;
-  tools::wallet2 w(nettype, restricted);
+  tools::wallet2 w(nettype);
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_9svHk1";
   string password = "test";
   bool r = false;
@@ -685,7 +684,7 @@ TEST(Serialization, portability_wallet)
   {}
   ASSERT_TRUE(r);
   /*
-  fields of tools::wallet2 to be checked:
+  fields of tools::wallet2 to be checked: 
     std::vector<crypto::hash>                                       m_blockchain
     std::vector<transfer_details>                                   m_transfers               // TODO
     cryptonote::account_public_address                              m_account_public_address
@@ -793,7 +792,7 @@ TEST(Serialization, portability_wallet)
   }
 }
 
-#define OUTPUT_EXPORT_FILE_MAGIC "Leviar output export\003"
+#define OUTPUT_EXPORT_FILE_MAGIC "Monero output export\003"
 TEST(Serialization, portability_outputs)
 {
   // read file
@@ -810,7 +809,7 @@ TEST(Serialization, portability_outputs)
     if(ciphertext.size() < prefix_size)
       return {};
     crypto::chacha_key key;
-    crypto::generate_chacha_key(&skey, sizeof(skey), key);
+    crypto::generate_chacha_key(&skey, sizeof(skey), key, 1);
     const crypto::chacha_iv &iv = *(const crypto::chacha_iv*)&ciphertext[0];
     std::string plaintext;
     plaintext.resize(ciphertext.size() - prefix_size);
@@ -825,7 +824,7 @@ TEST(Serialization, portability_outputs)
         return {};
     }
     crypto::chacha8(ciphertext.data() + sizeof(iv), ciphertext.size() - prefix_size, key, iv, &plaintext[0]);
-    return std::move(plaintext);
+    return plaintext;
   };
   crypto::secret_key view_secret_key;
   epee::string_tools::hex_to_pod("339673bb1187e2f73ba7841ab6841c5553f96e9f13f8fe6612e69318db4e9d0a", view_secret_key);
@@ -852,7 +851,7 @@ TEST(Serialization, portability_outputs)
   {}
   ASSERT_TRUE(r);
   /*
-  fields of tools::wallet2::transfer_details to be checked:
+  fields of tools::wallet2::transfer_details to be checked: 
     uint64_t                        m_block_height
     cryptonote::transaction_prefix  m_tx                        // TODO
     crypto::hash                    m_txid
@@ -909,7 +908,7 @@ TEST(Serialization, portability_outputs)
   ASSERT_TRUE(td2.m_pk_index == 0);
 }
 
-#define UNSIGNED_TX_PREFIX "Leviar unsigned tx set\003"
+#define UNSIGNED_TX_PREFIX "Monero unsigned tx set\003"
 TEST(Serialization, portability_unsigned_tx)
 {
   const boost::filesystem::path filename = unit_test::data_dir / "unsigned_monero_tx";
@@ -929,7 +928,7 @@ TEST(Serialization, portability_unsigned_tx)
     ar >> exported_txs;
     r = true;
   }
-  catch (...)
+  catch (...)  
   {}
   ASSERT_TRUE(r);
   /*
@@ -946,7 +945,7 @@ TEST(Serialization, portability_unsigned_tx)
     uint64_t                                      unlock_time
     bool                                          use_rct
     std::vector<cryptonote::tx_destination_entry> dests
-
+  
   fields of cryptonote::tx_source_entry to be checked:
     std::vector<std::pair<uint64_t, rct::ctkey>>  outputs
     size_t                                        real_output
@@ -955,7 +954,7 @@ TEST(Serialization, portability_unsigned_tx)
     uint64_t                                      amount
     bool                                          rct
     rct::key                                      mask
-
+  
   fields of cryptonote::tx_destination_entry to be checked:
     uint64_t                amount
     account_public_address  addr
@@ -986,7 +985,7 @@ TEST(Serialization, portability_unsigned_tx)
   // tcd.sources[0].{real_output, real_out_tx_key, real_output_in_tx_index, amount, rct, mask}
   ASSERT_TRUE(tse.real_output == 4);
   ASSERT_TRUE(epee::string_tools::pod_to_hex(tse.real_out_tx_key) == "4d86c7ba1c285fe4bc1cd7b54ba894fa89fa02fc6b0bbeea67d53251acd14a05");
-  ASSERT_TRUE(tse.real_output_in_tx_index == 1);
+  ASSERT_TRUE(tse.real_output_in_tx_index == 1); 
   ASSERT_TRUE(tse.amount == 11066009260865);
   ASSERT_TRUE(tse.rct);
   ASSERT_TRUE(epee::string_tools::pod_to_hex(tse.mask) == "789bafff169ef206aa21219342c69ca52ce1d78d776c10b21d14bdd960fc7703");
@@ -1057,7 +1056,7 @@ TEST(Serialization, portability_unsigned_tx)
   ASSERT_TRUE(td2.m_pk_index == 0);
 }
 
-#define SIGNED_TX_PREFIX "Leviar signed tx set\003"
+#define SIGNED_TX_PREFIX "Monero signed tx set\003"
 TEST(Serialization, portability_signed_tx)
 {
   const boost::filesystem::path filename = unit_test::data_dir / "signed_monero_tx";
@@ -1084,7 +1083,7 @@ TEST(Serialization, portability_signed_tx)
   fields of tools::wallet2::signed_tx_set to be checked:
     std::vector<pending_tx>         ptx
     std::vector<crypto::key_image>  key_images
-
+  
   fields of tools::walllet2::pending_tx to be checked:
     cryptonote::transaction                       tx                  // TODO
     uint64_t                                      dust
@@ -1141,7 +1140,7 @@ TEST(Serialization, portability_signed_tx)
   // ptx.construction_data.sources[0].{real_output, real_out_tx_key, real_output_in_tx_index, amount, rct, mask}
   ASSERT_TRUE(tse.real_output == 4);
   ASSERT_TRUE(epee::string_tools::pod_to_hex(tse.real_out_tx_key) == "4d86c7ba1c285fe4bc1cd7b54ba894fa89fa02fc6b0bbeea67d53251acd14a05");
-  ASSERT_TRUE(tse.real_output_in_tx_index == 1);
+  ASSERT_TRUE(tse.real_output_in_tx_index == 1); 
   ASSERT_TRUE(tse.amount == 11066009260865);
   ASSERT_TRUE(tse.rct);
   ASSERT_TRUE(epee::string_tools::pod_to_hex(tse.mask) == "789bafff169ef206aa21219342c69ca52ce1d78d776c10b21d14bdd960fc7703");

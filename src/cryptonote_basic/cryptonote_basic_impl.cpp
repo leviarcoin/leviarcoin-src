@@ -67,7 +67,7 @@ namespace cryptonote {
   /* Cryptonote helper functions                                          */
   /************************************************************************/
   //-----------------------------------------------------------------------------------------------
-  size_t get_min_block_size(uint8_t version)
+  size_t get_min_block_weight(uint8_t version)
   {
     if (version < 2)
       return CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1;
@@ -86,13 +86,10 @@ namespace cryptonote {
     return CRYPTONOTE_MAX_TX_SIZE;
   }
   //-----------------------------------------------------------------------------------------------
-  /*
-   * todo : add declaration to the header
-   * I think height params here is wrong
-   */
   size_t get_block_granted_full_reward_zone_by_height(uint32_t height)  {
+    // LEVIAR
     if (height >= UPGRADE_HEIGHT_V2) {
-      return CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE; // review this maybe we should use CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_CURRENT
+      return CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE;
     } else if (height >= UPGRADE_HEIGHT_V1) {
       return CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V2;
     } else {
@@ -101,6 +98,7 @@ namespace cryptonote {
   }
   //------------------------------------------------------------------------------------
   uint64_t get_penalized_amount(uint64_t amount, size_t median_size, size_t current_block_size) {
+    // LEVIAR
     static_assert(sizeof(size_t) >= sizeof(uint32_t), "size_t is too small");
     assert(current_block_size <= 2 * median_size);
     assert(median_size <= std::numeric_limits<uint32_t>::max());
@@ -127,17 +125,15 @@ namespace cryptonote {
 
     return reward_lo;
   }
-  //------------------------------------------------------------------------------------
-  /*
-  * todo : finish this function
-  * investigate the role of int64_t& emissionChange and implement it
-  */
-  bool get_block_reward(uint32_t height, size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t &reward,
+  
+  bool get_block_reward(uint32_t height, size_t median_weight, size_t current_block_weight, uint64_t already_generated_coins, uint64_t &reward,
                         uint8_t version, uint64_t fee) {
+      // LEVIAR
       assert(already_generated_coins <= MONEY_SUPPLY);
 
-      //if (version >= 2)
-        //return get_block_reward_v2(median_size, current_block_size, already_generated_coins, reward, version);
+      // Switch to Monero get_block_reward from v8
+      if (version >= 8)
+        return get_block_reward_v8(median_weight, current_block_weight, already_generated_coins, reward, version);
 
       const int emission_speed_factor = EMISSION_SPEED_FACTOR_PER_MINUTE;
       const int m_maxBlockHeight = CRYPTONOTE_MAX_BLOCK_NUMBER;
@@ -152,22 +148,22 @@ namespace cryptonote {
 
       size_t block_granted_full_reward_zone = get_block_granted_full_reward_zone_by_height(height);
 
-      median_size = std::max(median_size, block_granted_full_reward_zone);
+      median_weight = std::max(median_weight, block_granted_full_reward_zone);
 
-      if (current_block_size > UINT64_C(2) * median_size) {
-        MTRACE("Block cumulative size is too big: " << current_block_size << ", expected less than " << 2 * median_size);
+      if (current_block_weight > UINT64_C(2) * median_weight) {
+        MTRACE("Block cumulative size is too big: " << current_block_weight << ", expected less than " << 2 * median_weight);
         return false;
       }
 
-      uint64_t penalized_base_reward = get_penalized_amount(base_reward, median_size, current_block_size);
-      uint64_t penalized_fee = get_penalized_amount(fee, median_size, current_block_size);
+      uint64_t penalized_base_reward = get_penalized_amount(base_reward, median_weight, current_block_weight);
+      uint64_t penalized_fee = get_penalized_amount(fee, median_weight, current_block_weight);
 
       reward = penalized_base_reward - (fee - penalized_fee);
 
       return true;
   }
-  //------------------------------------------------------------------------------------
-  bool get_block_reward_v2(size_t median_size, size_t current_block_size, uint64_t already_generated_coins, uint64_t &reward, uint8_t version) {
+  //-----------------------------------------------------------------------------------------------
+  bool get_block_reward_v8(size_t median_weight, size_t current_block_weight, uint64_t already_generated_coins, uint64_t &reward, uint8_t version) {
     static_assert(DIFFICULTY_TARGET_V2%60==0&&DIFFICULTY_TARGET_V1%60==0,"difficulty targets must be a multiple of 60");
     const int target = DIFFICULTY_TARGET_V2;
     const int target_minutes = target / 60;
@@ -179,37 +175,37 @@ namespace cryptonote {
       base_reward = FINAL_SUBSIDY_PER_MINUTE*target_minutes;
     }
 
-    uint64_t full_reward_zone = get_min_block_size(version);
+    uint64_t full_reward_zone = get_min_block_weight(version);
 
     //make it soft
-    if (median_size < full_reward_zone) {
-      median_size = full_reward_zone;
+    if (median_weight < full_reward_zone) {
+      median_weight = full_reward_zone;
     }
 
-    if (current_block_size <= median_size) {
+    if (current_block_weight <= median_weight) {
       reward = base_reward;
       return true;
     }
 
-    if(current_block_size > 2 * median_size) {
-      MERROR("Block cumulative size is too big: " << current_block_size << ", expected less than " << 2 * median_size);
+    if(current_block_weight > 2 * median_weight) {
+      MERROR("Block cumulative weight is too big: " << current_block_weight << ", expected less than " << 2 * median_weight);
       return false;
     }
 
-    assert(median_size < std::numeric_limits<uint32_t>::max());
-    assert(current_block_size < std::numeric_limits<uint32_t>::max());
+    assert(median_weight < std::numeric_limits<uint32_t>::max());
+    assert(current_block_weight < std::numeric_limits<uint32_t>::max());
 
     uint64_t product_hi;
     // BUGFIX: 32-bit saturation bug (e.g. ARM7), the result was being
     // treated as 32-bit by default.
-    uint64_t multiplicand = 2 * median_size - current_block_size;
-    multiplicand *= current_block_size;
+    uint64_t multiplicand = 2 * median_weight - current_block_weight;
+    multiplicand *= current_block_weight;
     uint64_t product_lo = mul128(base_reward, multiplicand, &product_hi);
 
     uint64_t reward_hi;
     uint64_t reward_lo;
-    div128_32(product_hi, product_lo, static_cast<uint32_t>(median_size), &reward_hi, &reward_lo);
-    div128_32(reward_hi, reward_lo, static_cast<uint32_t>(median_size), &reward_hi, &reward_lo);
+    div128_32(product_hi, product_lo, static_cast<uint32_t>(median_weight), &reward_hi, &reward_lo);
+    div128_32(reward_hi, reward_lo, static_cast<uint32_t>(median_weight), &reward_hi, &reward_lo);
     assert(0 == reward_hi);
     assert(reward_lo < base_reward);
 
@@ -243,10 +239,7 @@ namespace cryptonote {
     , account_public_address const & adr
     )
   {
-    uint64_t address_prefix = nettype == TESTNET ?
-      (subaddress ? config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX) : nettype == STAGENET ?
-      (subaddress ? config::stagenet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX) :
-      (subaddress ? config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX);
+    uint64_t address_prefix = subaddress ? get_config(nettype).CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : get_config(nettype).CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
 
     return tools::base58::encode_addr(address_prefix, t_serializable_object_to_blob(adr));
   }
@@ -257,7 +250,7 @@ namespace cryptonote {
     , crypto::hash8 const & payment_id
     )
   {
-    uint64_t integrated_address_prefix = nettype == TESTNET ? config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : nettype == STAGENET ? config::stagenet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
+    uint64_t integrated_address_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
 
     integrated_address iadr = {
       adr, payment_id
@@ -282,15 +275,9 @@ namespace cryptonote {
     , std::string const & str
     )
   {
-    uint64_t address_prefix = nettype == TESTNET ?
-      config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX : nettype == STAGENET ?
-      config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX : config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
-    uint64_t integrated_address_prefix = nettype == TESTNET ?
-      config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : nettype == STAGENET ?
-      config::stagenet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX : config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
-    uint64_t subaddress_prefix = nettype == TESTNET ?
-      config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : nettype == STAGENET ?
-      config::stagenet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX : config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX;
+    uint64_t address_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
+    uint64_t integrated_address_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
+    uint64_t subaddress_prefix = get_config(nettype).CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX;
 
     if (2 * sizeof(public_address_outer_blob) != str.size())
     {
@@ -318,7 +305,7 @@ namespace cryptonote {
         info.has_payment_id = false;
       }
       else {
-        LOG_PRINT_L1("Wrong address prefix: " << prefix << ", expected " << address_prefix
+        LOG_PRINT_L1("Wrong address prefix: " << prefix << ", expected " << address_prefix 
           << " or " << integrated_address_prefix
           << " or " << subaddress_prefix);
         return false;

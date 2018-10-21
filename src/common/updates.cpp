@@ -39,17 +39,17 @@ namespace tools
 {
   bool check_updates(const std::string &software, const std::string &buildtag, std::string &version, std::string &hash)
   {
-    //TODO leviar
-    return false;
-
     std::vector<std::string> records;
     bool found = false;
 
     MDEBUG("Checking updates for " << buildtag << " " << software);
 
-    // All four Leviar domains have DNSSEC on and valid
+    // All four MoneroPulse domains have DNSSEC on and valid
     static const std::vector<std::string> dns_urls = {
-
+        "updates.moneropulse.org",
+        "updates.moneropulse.net",
+        "updates.moneropulse.co",
+        "updates.moneropulse.se"
     };
 
     if (!tools::dns_utils::load_txt_records_from_dns(records, dns_urls))
@@ -69,12 +69,12 @@ namespace tools
         continue;
 
       bool alnum = true;
-      for (auto c: hash)
+      for (auto c: fields[3])
         if (!isalnum(c))
           alnum = false;
-      if (hash.size() != 64 && !alnum)
+      if (fields[3].size() != 64 && !alnum)
       {
-        MWARNING("Invalid hash: " << hash);
+        MWARNING("Invalid hash: " << fields[3]);
         continue;
       }
 

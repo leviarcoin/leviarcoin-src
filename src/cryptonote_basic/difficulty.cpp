@@ -34,7 +34,6 @@
 #include <cstdint>
 #include <vector>
 
-#include "include_base_utils.h"
 #include "common/int-util.h"
 #include "crypto/hash.h"
 #include "cryptonote_config.h"
@@ -121,15 +120,16 @@ namespace cryptonote {
   }
 
   difficulty_type next_difficulty(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds) {
+
     if(timestamps.size() > DIFFICULTY_WINDOW)
     {
       timestamps.resize(DIFFICULTY_WINDOW);
       cumulative_difficulties.resize(DIFFICULTY_WINDOW);
     }
 
+
     size_t length = timestamps.size();
     assert(length == cumulative_difficulties.size());
-
     if (length <= 1) {
       return 1;
     }
@@ -137,7 +137,6 @@ namespace cryptonote {
     assert(length <= DIFFICULTY_WINDOW);
     sort(timestamps.begin(), timestamps.end());
     size_t cut_begin, cut_end;
-
     static_assert(2 * DIFFICULTY_CUT <= DIFFICULTY_WINDOW - 2, "Cut length is too large");
     if (length <= DIFFICULTY_WINDOW - 2 * DIFFICULTY_CUT) {
       cut_begin = 0;
@@ -151,7 +150,6 @@ namespace cryptonote {
     if (time_span == 0) {
       time_span = 1;
     }
-
     difficulty_type total_work = cumulative_difficulties[cut_end - 1] - cumulative_difficulties[cut_begin];
     assert(total_work > 0);
     uint64_t low, high;
@@ -163,4 +161,5 @@ namespace cryptonote {
     }
     return (low + time_span - 1) / time_span;
   }
+
 }

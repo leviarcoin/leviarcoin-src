@@ -685,7 +685,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
     {
       shutdown();
     }
-
+    
     return true;
     CATCH_ENTRY_L0("connection<t_protocol_handler>::close", false);
   }
@@ -748,7 +748,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
 		if (speed_limit_is_enabled())
 			do_send_handler_write_from_queue(e, m_send_que.front().size() , m_send_que.size()); // (((H)))
 		CHECK_AND_ASSERT_MES( size_now == m_send_que.front().size(), void(), "Unexpected queue size");
-		boost::asio::async_write(socket_, boost::asio::buffer(m_send_que.front().data(), size_now) ,
+		boost::asio::async_write(socket_, boost::asio::buffer(m_send_que.front().data(), size_now) , 
         // strand_.wrap(
           boost::bind(&connection<t_protocol_handler>::handle_write, connection<t_protocol_handler>::shared_from_this(), _1, _2)
 				// )
@@ -768,7 +768,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
   template<class t_protocol_handler>
   void connection<t_protocol_handler>::setRpcStation()
   {
-    m_connection_type = e_connection_type_RPC;
+    m_connection_type = e_connection_type_RPC; 
     MDEBUG("set m_connection_type = RPC ");
   }
 
@@ -787,8 +787,8 @@ PRAGMA_WARNING_DISABLE_VS(4355)
     m_io_service_local_instance(new boost::asio::io_service()),
     io_service_(*m_io_service_local_instance.get()),
     acceptor_(io_service_),
-    m_stop_signal_sent(false), m_port(0),
-	m_sock_count(0), m_sock_number(0), m_threads_count(0),
+    m_stop_signal_sent(false), m_port(0), 
+	m_sock_count(0), m_sock_number(0), m_threads_count(0), 
 	m_pfilter(NULL), m_thread_index(0),
 		m_connection_type( connection_type ),
     new_connection_()
@@ -801,8 +801,8 @@ PRAGMA_WARNING_DISABLE_VS(4355)
   boosted_tcp_server<t_protocol_handler>::boosted_tcp_server(boost::asio::io_service& extarnal_io_service, t_connection_type connection_type) :
     io_service_(extarnal_io_service),
     acceptor_(io_service_),
-    m_stop_signal_sent(false), m_port(0),
-		m_sock_count(0), m_sock_number(0), m_threads_count(0),
+    m_stop_signal_sent(false), m_port(0), 
+		m_sock_count(0), m_sock_number(0), m_threads_count(0), 
 		m_pfilter(NULL), m_thread_index(0),
 		m_connection_type(connection_type),
     new_connection_()
@@ -819,7 +819,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
   }
   //---------------------------------------------------------------------------------
   template<class t_protocol_handler>
-  void boosted_tcp_server<t_protocol_handler>::create_server_type_map()
+  void boosted_tcp_server<t_protocol_handler>::create_server_type_map() 
   {
 		server_type_map["NET"] = e_connection_type_NET;
 		server_type_map["RPC"] = e_connection_type_RPC;
@@ -866,7 +866,7 @@ PRAGMA_WARNING_DISABLE_VS(4355)
 PUSH_WARNINGS
 DISABLE_GCC_WARNING(maybe-uninitialized)
   template<class t_protocol_handler>
-  bool boosted_tcp_server<t_protocol_handler>::init_server(const std::string port, const std::string& address)
+  bool boosted_tcp_server<t_protocol_handler>::init_server(const std::string port, const std::string& address) 
   {
     uint32_t p = 0;
 
@@ -882,7 +882,7 @@ POP_WARNINGS
   bool boosted_tcp_server<t_protocol_handler>::worker_thread()
   {
     TRY_ENTRY();
-    uint32_t local_thr_index = boost::interprocess::ipcdetail::atomic_inc32(&m_thread_index);
+    uint32_t local_thr_index = boost::interprocess::ipcdetail::atomic_inc32(&m_thread_index); 
     std::string thread_name = std::string("[") + m_thread_name_prefix;
     thread_name += boost::to_string(local_thr_index) + "]";
     MLOG_SET_THREAD_NAME(thread_name);
@@ -954,7 +954,7 @@ POP_WARNINGS
         m_threads.clear();
         _fact("JOINING all threads - DONE");
 
-      }
+      } 
       else {
 		_dbg1("Reiniting OK.");
         return true;
@@ -1089,7 +1089,7 @@ POP_WARNINGS
     connections_mutex.unlock();
     epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){ CRITICAL_REGION_LOCAL(connections_mutex); connections_.erase(new_connection_l); });
     boost::asio::ip::tcp::socket&  sock_ = new_connection_l->socket();
-
+    
     //////////////////////////////////////////////////////////////////////////
     boost::asio::ip::tcp::resolver resolver(io_service_);
     boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), adr, port, boost::asio::ip::tcp::resolver::query::canonical_name);
@@ -1105,12 +1105,20 @@ POP_WARNINGS
 
     //boost::asio::ip::tcp::endpoint remote_endpoint(boost::asio::ip::address::from_string(addr.c_str()), port);
     boost::asio::ip::tcp::endpoint remote_endpoint(*iterator);
-
+     
     sock_.open(remote_endpoint.protocol());
     if(bind_ip != "0.0.0.0" && bind_ip != "0" && bind_ip != "" )
     {
-      boost::asio::ip::tcp::endpoint local_endpoint(boost::asio::ip::address::from_string(adr.c_str()), 0);
-      sock_.bind(local_endpoint);
+      boost::asio::ip::tcp::endpoint local_endpoint(boost::asio::ip::address::from_string(bind_ip.c_str()), 0);
+      boost::system::error_code ec;
+      sock_.bind(local_endpoint, ec);
+      if (ec)
+      {
+        MERROR("Error binding to " << bind_ip << ": " << ec.message());
+        if (sock_.is_open())
+          sock_.close();
+        return false;
+      }
     }
 
     /*
@@ -1179,7 +1187,7 @@ POP_WARNINGS
     {
       _erro("[sock " << new_connection_l->socket().native_handle() << "] Failed to start connection, connections_count = " << m_sock_count);
     }
-
+    
 	new_connection_l->save_dbg_log();
 
     return r;
@@ -1190,7 +1198,7 @@ POP_WARNINGS
   template<class t_protocol_handler> template<class t_callback>
   bool boosted_tcp_server<t_protocol_handler>::connect_async(const std::string& adr, const std::string& port, uint32_t conn_timeout, const t_callback &cb, const std::string& bind_ip)
   {
-    TRY_ENTRY();
+    TRY_ENTRY();    
     connection_ptr new_connection_l(new connection<t_protocol_handler>(io_service_, m_config, m_sock_count, m_sock_number, m_pfilter, m_connection_type) );
     connections_mutex.lock();
     connections_.insert(new_connection_l);
@@ -1198,7 +1206,7 @@ POP_WARNINGS
     connections_mutex.unlock();
     epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){ CRITICAL_REGION_LOCAL(connections_mutex); connections_.erase(new_connection_l); });
     boost::asio::ip::tcp::socket&  sock_ = new_connection_l->socket();
-
+    
     //////////////////////////////////////////////////////////////////////////
     boost::asio::ip::tcp::resolver resolver(io_service_);
     boost::asio::ip::tcp::resolver::query query(boost::asio::ip::tcp::v4(), adr, port, boost::asio::ip::tcp::resolver::query::canonical_name);
@@ -1211,20 +1219,28 @@ POP_WARNINGS
     }
     //////////////////////////////////////////////////////////////////////////
     boost::asio::ip::tcp::endpoint remote_endpoint(*iterator);
-
+     
     sock_.open(remote_endpoint.protocol());
     if(bind_ip != "0.0.0.0" && bind_ip != "0" && bind_ip != "" )
     {
-      boost::asio::ip::tcp::endpoint local_endpoint(boost::asio::ip::address::from_string(adr.c_str()), 0);
-      sock_.bind(local_endpoint);
+      boost::asio::ip::tcp::endpoint local_endpoint(boost::asio::ip::address::from_string(bind_ip.c_str()), 0);
+      boost::system::error_code ec;
+      sock_.bind(local_endpoint, ec);
+      if (ec)
+      {
+        MERROR("Error binding to " << bind_ip << ": " << ec.message());
+        if (sock_.is_open())
+          sock_.close();
+        return false;
+      }
     }
-
+    
     boost::shared_ptr<boost::asio::deadline_timer> sh_deadline(new boost::asio::deadline_timer(io_service_));
     //start deadline
     sh_deadline->expires_from_now(boost::posix_time::milliseconds(conn_timeout));
     sh_deadline->async_wait([=](const boost::system::error_code& error)
       {
-          if(error != boost::asio::error::operation_aborted)
+          if(error != boost::asio::error::operation_aborted) 
           {
             _dbg3("Failed to connect to " << adr << ':' << port << ", because of timeout (" << conn_timeout << ")");
             new_connection_l->socket().close();
@@ -1272,7 +1288,7 @@ POP_WARNINGS
     return true;
     CATCH_ENTRY_L0("boosted_tcp_server<t_protocol_handler>::connect_async", false);
   }
-
+  
 } // namespace
 } // namespace
 PRAGMA_WARNING_POP

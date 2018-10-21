@@ -159,9 +159,9 @@ namespace net_utils
     critical_section m_self_refs_lock;
     critical_section m_chunking_lock; // held while we add small chunks of the big do_send() to small do_send_chunk()
     critical_section m_shutdown_lock; // held while shutting down
-
+    
     t_connection_type m_connection_type;
-
+    
     // for calculate speed (last 60 sec)
     network_throttle m_throttle_speed_in;
     network_throttle m_throttle_speed_out;
@@ -194,7 +194,7 @@ namespace net_utils
     boosted_tcp_server(t_connection_type connection_type);
     explicit boosted_tcp_server(boost::asio::io_service& external_io_service, t_connection_type connection_type);
     ~boosted_tcp_server();
-
+    
     std::map<std::string, t_connection_type> server_type_map;
     void create_server_type_map();
 
@@ -304,7 +304,7 @@ namespace net_utils
 
     /// The io_service used to perform asynchronous operations.
     std::unique_ptr<boost::asio::io_service> m_io_service_local_instance;
-    boost::asio::io_service& io_service_;
+    boost::asio::io_service& io_service_;    
 
     /// Acceptor used to listen for incoming connections.
     boost::asio::ip::tcp::acceptor acceptor_;

@@ -135,9 +135,9 @@ namespace cryptonote
   //---------------------------------------------------------------------------
   uint64_t checkpoints::get_max_height() const
   {
-    std::map< uint64_t, crypto::hash >::const_iterator highest =
+    std::map< uint64_t, crypto::hash >::const_iterator highest = 
         std::max_element( m_points.begin(), m_points.end(),
-                         ( boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, _1) <
+                         ( boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, _1) < 
                            boost::bind(&std::map< uint64_t, crypto::hash >::value_type::first, _2 ) ) );
     return highest->first;
   }
@@ -161,19 +161,17 @@ namespace cryptonote
 
   bool checkpoints::init_default_checkpoints(network_type nettype)
   {
+    // LEVIAR
     if (nettype == TESTNET)
     {
-      //TODO leviar add testnet checkpoint here
-      //ADD_CHECKPOINT(0, "");
+      //TODO LEVIAR add testnet checkpoints here
       return true;
     }
     if (nettype == STAGENET)
     {
-      //TODO leviar add stagenet checkpoint here
-      //ADD_CHECKPOINT(0, "");
+      //TODO LEVIAR add stagenet checkpoints here
       return true;
     }
-
     ADD_CHECKPOINT(10000, "02ff33848a071b41cd7db0d9a0778c4c8af7fdb6584b6025f31fb690bd20bc6f");
     ADD_CHECKPOINT(20000, "6de1587fc5f368b9a6f692df7d104177a60978116b0c70f8c244a3d7e627242e");
     ADD_CHECKPOINT(30000, "8104c5d16b45b522dfa3c2b995231647d4eff95d6139c8502a74fa59cfacb419");
@@ -184,6 +182,7 @@ namespace cryptonote
     ADD_CHECKPOINT(200000, "b29e34bef7b0179b4defe94519b78507def44ebc329881552f14637bb3f377d8");
     ADD_CHECKPOINT(250001, "c4b96c8c66c44aa9aaed5a37e05754efc895ef97be19ac0775d4bea9cdef19a2");
     ADD_CHECKPOINT(300000, "a509b307f54b87ed455cd54f0218094e47a842a00d19718777737beec7113ced");
+    ADD_CHECKPOINT(325001, "69617bce6edca3cdbc4dd9a4b5883e0c605c0102606882f4a1624cdb919f3463");
     ADD_CHECKPOINT(337001, "f73115c8e554b8329c3b51515db48621a3f9d15fb706dd6833b0a93ba00df019");
     ADD_CHECKPOINT(350000, "526bc5bf0f9fd9cf98d667ad31037b6f0a650e244198a3f37c0ae5083e0481d2");
     ADD_CHECKPOINT(400000, "f9bd42517ef8a94b781d7d8d644aab331a256fd570973843d6868278af246ea0");
@@ -193,7 +192,8 @@ namespace cryptonote
     ADD_CHECKPOINT(491000, "7fa574972fb3800c865c159a34f9bbe4b5da6d305c23e314291e5124e7da8ecc");
     ADD_CHECKPOINT(492000, "2a26e4ddb242c419c2899c7a755dde288b71bc4ed3ee98ce36d7ce5a7c783171");
     ADD_CHECKPOINT(493500, "0ebd9977e905aebf5f78e66db93c2103e4c834f49f2edfa0055cf37680c089ef");
-
+    ADD_CHECKPOINT(586000, "9efde90aab1f27909dccdbd943d32a563ff853fa2a8f4f752f4328d817b05d58");
+    ADD_CHECKPOINT(630000, "c1427a0822397d0e03508fbb36d5e341cf239d7078b71f270eb3eb5d914f6d90");
     return true;
   }
 
@@ -221,11 +221,11 @@ namespace cryptonote
       uint64_t height;
       height = it->height;
       if (height <= prev_max_height) {
-	       LOG_PRINT_L1("ignoring checkpoint height " << height);
+	LOG_PRINT_L1("ignoring checkpoint height " << height);
       } else {
-      	std::string blockhash = it->hash;
-      	LOG_PRINT_L1("Adding checkpoint height " << height << ", hash=" << blockhash);
-      	ADD_CHECKPOINT(height, blockhash);
+	std::string blockhash = it->hash;
+	LOG_PRINT_L1("Adding checkpoint height " << height << ", hash=" << blockhash);
+	ADD_CHECKPOINT(height, blockhash);
       }
       ++it;
     }
@@ -235,8 +235,9 @@ namespace cryptonote
 
   bool checkpoints::load_checkpoints_from_dns(network_type nettype)
   {
-    // TODO leviar: disabled now
+    // TODO LEVIAR disabled
     return true;
+    
     std::vector<std::string> records;
 
     // All four Leviar domains have DNSSEC on and valid
@@ -262,7 +263,7 @@ namespace cryptonote
         std::stringstream ss(record.substr(0, pos));
         if (!(ss >> height))
         {
-          continue;
+    continue;
         }
 
         // parse the second part as crypto::hash,
@@ -270,7 +271,7 @@ namespace cryptonote
         std::string hashStr = record.substr(pos + 1);
         if (!epee::string_tools::parse_tpod_from_hex_string(hashStr, hash))
         {
-          continue;
+    continue;
         }
 
         ADD_CHECKPOINT(height, hashStr);

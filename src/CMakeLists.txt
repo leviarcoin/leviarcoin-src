@@ -145,7 +145,3 @@ if(PER_BLOCK_CHECKPOINT)
 endif()
 
 add_subdirectory(device)
-
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0")
-
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0")
